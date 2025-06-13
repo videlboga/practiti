@@ -1,0 +1,42 @@
+# 🤖 CyberKitty Practiti Backend Dependencies
+
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Telegram Bot
+python-telegram-bot==20.7
+
+# Google Sheets Integration  
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+
+# Data Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Async HTTP Client
+httpx==0.25.2
+aiofiles==23.2.1
+
+# Task Scheduling
+apscheduler==3.10.4
+
+# Configuration
+python-dotenv==1.0.0
+
+# Logging
+structlog==23.2.0
+
+# Development Dependencies
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+black==23.11.0
+isort==5.12.0
+mypy==1.7.1
+flake8==6.1.0
+
+# Testing
+pytest-cov==4.1.0 
