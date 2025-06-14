@@ -68,7 +68,7 @@ class CommandHandlers(BaseHandler):
             else:
                 # Новый пользователь
                 welcome_message = (
-                    f"🌟 Добро пожаловать в йога-студию!\n\n"
+                    f"🌟 Добро пожаловать в Practiti!\n\n"
                     f"👋 Привет, {first_name or 'друг'}!\n\n"
                     f"📝 Для записи на занятия нужно пройти регистрацию.\n"
                     f"Это займет всего пару минут!\n\n"
@@ -159,7 +159,7 @@ class CommandHandlers(BaseHandler):
         
         try:
             info_message = (
-                "🧘‍♀️ **Йога Студия**\n\n"
+                "🧘‍♀️ **Practiti - Йога Студия**\n\n"
                 "✨ **Наша миссия:**\n"
                 "Создать пространство гармонии, где каждый может найти "
                 "свой путь к внутреннему равновесию через практику йоги.\n\n"
@@ -241,6 +241,37 @@ class CommandHandlers(BaseHandler):
                 
                 # TODO: Здесь будет вызов RegistrationHandlers.start_registration()
                 logger.info(f"Команда /register: начало регистрации для @{username}")
+                
+        except Exception as e:
+            await self.handle_error(update, context, e)
+
+    async def clear_registration_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Обработка команды /clear_registration.
+        
+        Очищает текущую регистрацию пользователя (для отладки).
+        """
+        await self.log_command(update, "clear_registration")
+        
+        try:
+            user_id, username, _ = await self.get_user_info(update)
+            
+            # Получаем registration_service из application.bot_data
+            bot_instance = context.application.bot_data.get('bot_instance')
+            if bot_instance and hasattr(bot_instance, 'registration_service'):
+                registration_service = bot_instance.registration_service
+                
+                # Очищаем ВСЕ регистрации (для отладки)
+                count = registration_service.clear_all_registrations()
+                
+                message = f"✅ Очищено {count} активных регистраций. Можете начать заново с /register"
+                logger.info(f"Очищено {count} активных регистраций по команде от @{username}")
+            else:
+                message = "❌ Ошибка доступа к сервису регистрации"
+                logger.error("Не удалось получить registration_service")
+            
+            if update.effective_chat:
+                await update.effective_chat.send_message(message)
                 
         except Exception as e:
             await self.handle_error(update, context, e)

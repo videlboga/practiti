@@ -85,6 +85,9 @@ class PrakritiTelegramBot:
         # Регистрируем обработчик ошибок
         self.application.add_error_handler(self._error_handler)
         
+        # Сохраняем ссылку на бота в bot_data для доступа из handlers
+        self.application.bot_data['bot_instance'] = self
+        
         logger.info("Telegram Bot успешно инициализирован")
     
     async def _register_handlers(self) -> None:
@@ -105,6 +108,9 @@ class PrakritiTelegramBot:
         )
         self.application.add_handler(
             CommandHandler("register", self.command_handlers.register_command)
+        )
+        self.application.add_handler(
+            CommandHandler("clear_registration", self.command_handlers.clear_registration_command)
         )
         
         # ConversationHandler для регистрации

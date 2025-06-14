@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     )
     
     # Общие настройки
-    app_name: str = "CyberKitty Practiti Backend"
+    app_name: str = "Practiti Backend"
     debug: bool = False
     
     # Telegram Bot
@@ -84,8 +84,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_cors_origins: str = "http://localhost:3000"
     
-    # Логирование
+    # Логирование  
     log_level: str = "INFO"
+    
+    # Тестовые поля
+    secret_key: str = "default_secret_key"
+    environment: str = "production"
     
     def get_telegram_config(self) -> TelegramConfig:
         """Получить конфигурацию Telegram Bot."""
@@ -114,4 +118,27 @@ class Settings(BaseSettings):
 
 
 # Глобальный экземпляр настроек
-settings = Settings() 
+settings = Settings()
+
+
+def get_test_settings() -> Settings:
+    """
+    Получить настройки для тестирования.
+    
+    Returns:
+        Экземпляр Settings с тестовыми значениями
+    """
+    # Создаем тестовые настройки с переопределением значений
+    test_settings = Settings(
+        app_name="Practiti Test",
+        debug=True,
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "test_bot_token"),
+        google_sheets_id=os.getenv("GOOGLE_SPREADSHEET_ID", "test_spreadsheet_id"),
+        google_credentials_path="test_credentials.json"
+    )
+    
+    # Добавляем дополнительные атрибуты для совместимости с тестами
+    test_settings.secret_key = os.getenv("SECRET_KEY", "test_secret_key")
+    test_settings.environment = "testing"
+    
+    return test_settings 

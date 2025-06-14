@@ -360,6 +360,18 @@ class RegistrationService:
             return True
         return False
     
+    def clear_all_registrations(self) -> int:
+        """
+        Очистить все активные регистрации (для отладки).
+        
+        Returns:
+            Количество очищенных регистраций
+        """
+        count = len(self._active_registrations)
+        self._active_registrations.clear()
+        logger.info(f"Очищено {count} активных регистраций")
+        return count
+    
     def get_current_step(self, telegram_id: int) -> Optional[dict]:
         """
         Получить информацию о текущем шаге регистрации.
@@ -384,3 +396,4 @@ class RegistrationService:
             }
         
         return None
+ 

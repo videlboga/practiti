@@ -6,7 +6,7 @@
 
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class RegistrationState(Enum):
@@ -44,7 +44,8 @@ class RegistrationData(BaseModel):
     how_found_us: Optional[str] = None
     current_state: RegistrationState = RegistrationState.START
     
-    @validator('phone')
+    @field_validator('phone')
+    @classmethod
     def validate_phone_format(cls, v):
         """Валидация формата телефона."""
         if v is None:
@@ -68,7 +69,8 @@ class RegistrationData(BaseModel):
         
         return cleaned
     
-    @validator('age')
+    @field_validator('age')
+    @classmethod
     def validate_age_range(cls, v):
         """Валидация возраста."""
         if v is not None and (v < 16 or v > 80):

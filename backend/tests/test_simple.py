@@ -11,7 +11,7 @@ os.environ["TELEGRAM_BOT_TOKEN"] = "test_token"
 os.environ["GOOGLE_SPREADSHEET_ID"] = "test_spreadsheet"
 os.environ["SECRET_KEY"] = "test_secret"
 
-from backend.config.settings import get_test_settings
+from src.config.settings import get_test_settings
 
 
 def test_test_settings():
@@ -20,7 +20,7 @@ def test_test_settings():
     
     # Проверяем, что настройки загружаются (значения могут быть из env переменных)
     assert settings.telegram_bot_token is not None
-    assert settings.google_spreadsheet_id is not None
+    assert settings.google_sheets_id is not None  # Исправлено имя поля
     assert settings.secret_key is not None
     assert settings.debug is True
     assert settings.environment == "testing"

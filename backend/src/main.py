@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 Главный модуль CyberKitty Practiti Backend
+🚀 Главный модуль Practiti Backend
 
 Точка входа для запуска Telegram Bot и API.
 Принцип CyberKitty: простота превыше всего.
@@ -15,7 +15,6 @@ from typing import Optional
 from .config.settings import settings
 from .presentation.telegram.bot import PrakritiTelegramBot
 from .services.client_service import ClientService
-from .repositories.google_sheets_client_repository import GoogleSheetsClientRepository
 
 # Настройка логирования
 logging.basicConfig(
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class PrakritiApplication:
     """
-    Основное приложение CyberKitty Practiti.
+    Основное приложение Practiti.
     
     Управляет запуском и остановкой всех компонентов:
     - Telegram Bot
@@ -55,11 +54,10 @@ class PrakritiApplication:
         logger.info("Инициализация компонентов приложения...")
         
         try:
-            # Инициализируем репозиторий
-            logger.info("Инициализация Google Sheets репозитория...")
-            from .integrations.google_sheets import GoogleSheetsClient
-            google_sheets_client = GoogleSheetsClient()
-            client_repository = GoogleSheetsClientRepository(google_sheets_client)
+            # Временно используем репозиторий в памяти для тестирования
+            logger.info("Инициализация временного репозитория в памяти...")
+            from .repositories.in_memory_client_repository import InMemoryClientRepository
+            client_repository = InMemoryClientRepository()
             
             # Инициализируем сервисы
             logger.info("Инициализация ClientService...")
@@ -84,7 +82,7 @@ class PrakritiApplication:
         if not self.telegram_bot:
             await self.initialize()
         
-        logger.info("🚀 Запуск CyberKitty Practiti Backend...")
+        logger.info("🚀 Запуск Practiti Backend...")
         
         self.is_running = True
         
@@ -101,7 +99,7 @@ class PrakritiApplication:
         """
         Остановка приложения.
         """
-        logger.info("Остановка CyberKitty Practiti Backend...")
+        logger.info("Остановка Practiti Backend...")
         
         self.is_running = False
         
@@ -133,8 +131,9 @@ async def main():
     """
     Основная функция запуска.
     """
-    logger.info("🤖 CyberKitty Practiti Backend запускается...")
+    logger.info("🤖 Practiti Backend запускается...")
     logger.info("Андрей, принцип: простота превыше всего! 🚀")
+    logger.info("⚠️  Используется временный репозиторий в памяти для тестирования")
     
     # Создаем приложение
     app = PrakritiApplication()
@@ -162,7 +161,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("👋 CyberKitty Practiti Backend завершен пользователем")
+        logger.info("👋 Practiti Backend завершен пользователем")
     except Exception as e:
         logger.critical(f"💥 Критическая ошибка при запуске: {e}")
         sys.exit(1) 
