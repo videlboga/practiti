@@ -16,6 +16,7 @@ from telegram import Update
 
 from ...config.settings import TelegramConfig
 from ...services.protocols.client_service import ClientServiceProtocol
+from ...services.protocols.subscription_service import SubscriptionServiceProtocol
 from .handlers.command_handlers import CommandHandlers
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,8 @@ class PrakritiTelegramBot:
     def __init__(
         self, 
         config: TelegramConfig,
-        client_service: ClientServiceProtocol
+        client_service: ClientServiceProtocol,
+        subscription_service: SubscriptionServiceProtocol
     ):
         """
         Инициализация Telegram Bot.
@@ -46,9 +48,11 @@ class PrakritiTelegramBot:
         Args:
             config: Конфигурация Telegram Bot
             client_service: Сервис для работы с клиентами
+            subscription_service: Сервис для работы с абонементами
         """
         self.config = config
         self.client_service = client_service
+        self.subscription_service = subscription_service
         
         # Создаем приложение бота
         self.application: Optional[Application] = None

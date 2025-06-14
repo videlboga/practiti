@@ -15,6 +15,7 @@ from typing import Optional
 from .config.settings import settings
 from .presentation.telegram.bot import PrakritiTelegramBot
 from .services.client_service import ClientService
+from .services.subscription_service import SubscriptionService
 
 # Настройка логирования
 logging.basicConfig(
@@ -43,6 +44,7 @@ class PrakritiApplication:
         """Инициализация приложения."""
         self.telegram_bot: Optional[PrakritiTelegramBot] = None
         self.client_service: Optional[ClientService] = None
+        self.subscription_service: Optional[SubscriptionService] = None
         self.is_running = False
         
         logger.info("PrakritiApplication инициализировано")
@@ -54,19 +56,29 @@ class PrakritiApplication:
         logger.info("Инициализация компонентов приложения...")
         
         try:
-            # Временно используем репозиторий в памяти для тестирования
-            logger.info("Инициализация временного репозитория в памяти...")
+            # Временно используем репозитории в памяти для тестирования
+            logger.info("Инициализация временных репозиториев в памяти...")
             from .repositories.in_memory_client_repository import InMemoryClientRepository
+            from .repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
+            
             client_repository = InMemoryClientRepository()
+            subscription_repository = InMemorySubscriptionRepository()
             
             # Инициализируем сервисы
             logger.info("Инициализация ClientService...")
             self.client_service = ClientService(client_repository)
             
+            logger.info("Инициализация SubscriptionService...")
+            self.subscription_service = SubscriptionService(subscription_repository)
+            
             # Инициализируем Telegram Bot
             logger.info("Инициализация Telegram Bot...")
             telegram_config = settings.get_telegram_config()
-            self.telegram_bot = PrakritiTelegramBot(telegram_config, self.client_service)
+            self.telegram_bot = PrakritiTelegramBot(
+                telegram_config, 
+                self.client_service, 
+                self.subscription_service
+            )
             await self.telegram_bot.initialize()
             
             logger.info("Все компоненты успешно инициализированы")
