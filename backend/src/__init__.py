@@ -1,7 +1,5 @@
 """
-🤖 CyberKitty Practiti Backend
-
-Главный пакет backend приложения для управления студией йоги.
+CyberKitty Practiti Backend Package
 """
 
 __version__ = "1.0.0"

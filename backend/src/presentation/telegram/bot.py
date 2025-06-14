@@ -10,7 +10,7 @@ import logging
 from typing import Optional
 
 from telegram import BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, ConversationHandler, CallbackQueryHandler, filters
 from telegram.ext import ContextTypes
 from telegram import Update
 
@@ -19,6 +19,9 @@ from ...services.protocols.client_service import ClientServiceProtocol
 from .handlers.command_handlers import CommandHandlers
 
 logger = logging.getLogger(__name__)
+
+# Импортируем состояния из registration_handlers
+from .handlers.registration_handlers import REGISTRATION_INPUT, REGISTRATION_CONFIRM
 
 
 class PrakritiTelegramBot:
@@ -51,7 +54,12 @@ class PrakritiTelegramBot:
         self.application: Optional[Application] = None
         
         # Инициализируем обработчики
+        from ...services.registration_service import RegistrationService
+        from .handlers.registration_handlers import RegistrationHandlers
+        
+        self.registration_service = RegistrationService(client_service)
         self.command_handlers = CommandHandlers(client_service)
+        self.registration_handlers = RegistrationHandlers(self.registration_service)
         
         logger.info("PrakritiTelegramBot инициализирован")
     
@@ -95,6 +103,59 @@ class PrakritiTelegramBot:
         self.application.add_handler(
             CommandHandler("info", self.command_handlers.info_command)
         )
+        self.application.add_handler(
+            CommandHandler("register", self.command_handlers.register_command)
+        )
+        
+        # ConversationHandler для регистрации
+        registration_conv_handler = ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    self._start_registration_callback,
+                    pattern="^start_registration$"
+                )
+            ],
+            states={
+                REGISTRATION_INPUT: [
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, 
+                        self.registration_handlers.process_registration_input
+                    ),
+                    CommandHandler("skip", self.registration_handlers.process_registration_input),
+                    CallbackQueryHandler(
+                        self.registration_handlers.handle_callback_query,
+                        pattern="^reg_"
+                    ),
+                ],
+                REGISTRATION_CONFIRM: [
+                    CallbackQueryHandler(
+                        self.registration_handlers.handle_callback_query,
+                        pattern="^confirm_"
+                    ),
+                    MessageHandler(
+                        filters.Regex("^✅ Подтвердить$"), 
+                        self.registration_handlers.confirm_registration
+                    ),
+                    MessageHandler(
+                        filters.Regex("^✏️ Изменить$"), 
+                        self._restart_registration
+                    ),
+                    MessageHandler(
+                        filters.Regex("^❌ Отменить$"), 
+                        self._cancel_registration_conversation
+                    ),
+                ]
+            },
+            fallbacks=[
+                CommandHandler("cancel", self._cancel_registration_conversation),
+                MessageHandler(
+                    filters.Regex("^❌ Отменить$"), 
+                    self._cancel_registration_conversation
+                )
+            ],
+        )
+        
+        self.application.add_handler(registration_conv_handler)
         
         # Обработчик неизвестных команд (должен быть последним)
         self.application.add_handler(
@@ -279,4 +340,63 @@ class PrakritiTelegramBot:
         return (
             self.application is not None and 
             self.application.running
-        ) 
+        )
+    
+    async def _restart_registration(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """
+        Перезапустить регистрацию с начала.
+        
+        Args:
+            update: Telegram Update
+            context: Telegram Context
+            
+        Returns:
+            Следующее состояние ConversationHandler
+        """
+        user_id, username, first_name = await self.registration_handlers.get_user_info(update)
+        
+        # Отменяем текущую регистрацию
+        self.registration_service.cancel_registration(user_id)
+        
+        # Начинаем заново
+        await self.registration_handlers.start_registration(update, context)
+        
+        return REGISTRATION_INPUT
+    
+    async def _cancel_registration_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """
+        Отменить регистрацию в ConversationHandler.
+        
+        Args:
+            update: Telegram Update
+            context: Telegram Context
+            
+        Returns:
+            ConversationHandler.END
+        """
+        user_id, username, first_name = await self.registration_handlers.get_user_info(update)
+        
+        # Отменяем регистрацию
+        await self.registration_handlers._cancel_registration(update, context, user_id)
+        
+        return ConversationHandler.END
+    
+    async def _start_registration_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """
+        Обработать нажатие кнопки "Начать регистрацию".
+        
+        Args:
+            update: Telegram Update
+            context: Telegram Context
+            
+        Returns:
+            Следующее состояние ConversationHandler
+        """
+        query = update.callback_query
+        await query.answer()
+        
+        # Удаляем кнопки и начинаем регистрацию
+        await query.edit_message_text("🚀 Отлично! Начинаем регистрацию...")
+        
+        # Вызываем start_registration из registration_handlers
+        return await self.registration_handlers.start_registration(update, context) 
