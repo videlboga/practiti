@@ -207,9 +207,10 @@ class RegistrationService:
         """Обработать ввод интенсивности."""
         intensity_lower = intensity.lower().strip()
         valid_intensities = {
-            "мягкая": "Мягкая",
-            "средняя": "Средняя", 
-            "интенсивная": "Интенсивная"
+            "низкая": "низкая",
+            "средняя": "средняя", 
+            "высокая": "высокая",
+            "любая": "любая"
         }
         
         for key, value in valid_intensities.items():
@@ -218,20 +219,22 @@ class RegistrationService:
                 registration.current_state = RegistrationState.WAITING_TIME_PREFERENCE
                 return registration, True
         
-        raise ValidationError("Пожалуйста, выберите: Мягкая, Средняя или Интенсивная")
+        raise ValidationError("Пожалуйста, выберите: Низкая, Средняя, Высокая или Любая")
     
     def _process_time_preference(self, registration: RegistrationData, time_pref: str) -> tuple[RegistrationData, bool]:
         """Обработать ввод времени занятий."""
         time_lower = time_pref.lower().strip()
         
         if "утр" in time_lower:
-            registration.time_preference = "Утром (7:00-12:00)"
+            registration.time_preference = "утро"
         elif "дн" in time_lower:
-            registration.time_preference = "Днем (12:00-17:00)"
+            registration.time_preference = "день"
         elif "веч" in time_lower:
-            registration.time_preference = "Вечером (17:00-21:00)"
+            registration.time_preference = "вечер"
+        elif "люб" in time_lower:
+            registration.time_preference = "любое"
         else:
-            raise ValidationError("Пожалуйста, выберите: Утром, Днем или Вечером")
+            raise ValidationError("Пожалуйста, выберите: Утро, День, Вечер или Любое")
         
         registration.current_state = RegistrationState.WAITING_INJURIES
         return registration, True

@@ -146,14 +146,14 @@ REGISTRATION_STEPS = {
         state=RegistrationState.WAITING_INTENSITY,
         question="💪 Какую интенсивность занятий предпочитаете?",
         help_text="Выберите подходящий уровень:",
-        options=["Мягкая", "Средняя", "Интенсивная"]
+        options=["Низкая", "Средняя", "Высокая", "Любая"]
     ),
     
     RegistrationState.WAITING_TIME_PREFERENCE: RegistrationStep(
         state=RegistrationState.WAITING_TIME_PREFERENCE,
         question="⏰ В какое время вам удобно заниматься?",
         help_text="Выберите предпочтительное время:",
-        options=["Утром (7:00-12:00)", "Днем (12:00-17:00)", "Вечером (17:00-21:00)"]
+        options=["Утро", "День", "Вечер", "Любое"]
     ),
     
     RegistrationState.WAITING_INJURIES: RegistrationStep(

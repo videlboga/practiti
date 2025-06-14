@@ -86,7 +86,7 @@ class RegistrationHandlers(BaseHandler):
             return REGISTRATION_INPUT
             
         except Exception as e:
-            await self.handle_error(update, context, e, "start_registration")
+            await self.handle_error(update, context, e)
             return ConversationHandler.END
     
     async def process_registration_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -136,7 +136,7 @@ class RegistrationHandlers(BaseHandler):
             return ConversationHandler.END
             
         except Exception as e:
-            await self.handle_error(update, context, e, "process_registration_input")
+            await self.handle_error(update, context, e)
             return ConversationHandler.END
     
     async def confirm_registration(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -179,7 +179,7 @@ class RegistrationHandlers(BaseHandler):
                 return REGISTRATION_CONFIRM
                 
         except Exception as e:
-            await self.handle_error(update, context, e, "confirm_registration")
+            await self.handle_error(update, context, e)
             return ConversationHandler.END
     
     async def _send_current_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE, state: RegistrationState) -> None:
@@ -315,7 +315,7 @@ class RegistrationHandlers(BaseHandler):
             return REGISTRATION_INPUT
             
         except Exception as e:
-            await self.handle_error(update, context, e, "handle_callback_query")
+            await self.handle_error(update, context, e)
             return ConversationHandler.END
         
         return REGISTRATION_INPUT
