@@ -16,6 +16,7 @@ from ..repositories.protocols.notification_repository import NotificationReposit
 from ..services.protocols.notification_service import NotificationServiceProtocol
 from ..services.protocols.client_service import ClientServiceProtocol
 from ..services.protocols.subscription_service import SubscriptionServiceProtocol
+from ..services.telegram_sender_service import TelegramSenderService
 from ..utils.exceptions import BusinessLogicError
 from ..utils.logger import get_logger
 
@@ -33,7 +34,8 @@ class NotificationService(NotificationServiceProtocol):
         self, 
         notification_repository: NotificationRepositoryProtocol,
         client_service: ClientServiceProtocol,
-        subscription_service: SubscriptionServiceProtocol
+        subscription_service: SubscriptionServiceProtocol,
+        telegram_sender: Optional[TelegramSenderService] = None
     ):
         """
         Инициализация сервиса.
@@ -42,10 +44,12 @@ class NotificationService(NotificationServiceProtocol):
             notification_repository: Репозиторий для работы с данными уведомлений
             client_service: Сервис для работы с клиентами
             subscription_service: Сервис для работы с абонементами
+            telegram_sender: Сервис отправки Telegram сообщений (опционально)
         """
         self._repository = notification_repository
         self._client_service = client_service
         self._subscription_service = subscription_service
+        self._telegram_sender = telegram_sender or TelegramSenderService()
         
         logger.info("NotificationService инициализирован")
     
@@ -205,12 +209,31 @@ class NotificationService(NotificationServiceProtocol):
             logger.warning(f"Попытка отправить уведомление {notification_id} со статусом {notification.status}")
             return False
         
-        # TODO: Здесь будет интеграция с Telegram Bot для отправки
-        # Пока просто помечаем как отправленное
-        await self.mark_as_sent(notification_id)
-        
-        logger.info(f"Уведомление {notification_id} отправлено")
-        return True
+        try:
+            # Получаем клиента для отправки
+            client = await self._client_service.get_client(notification.client_id)
+            
+            # Отправляем через Telegram
+            success, message_id, error = await self._telegram_sender.send_notification_to_client(
+                client, notification
+            )
+            
+            if success:
+                # Помечаем как отправленное
+                await self.mark_as_sent(notification_id, message_id)
+                logger.info(f"Уведомление {notification_id} отправлено успешно")
+                return True
+            else:
+                # Помечаем как неудачное
+                await self.mark_as_failed(notification_id, error or "Неизвестная ошибка отправки")
+                logger.error(f"Не удалось отправить уведомление {notification_id}: {error}")
+                return False
+                
+        except Exception as e:
+            # Помечаем как неудачное при критической ошибке
+            await self.mark_as_failed(notification_id, str(e))
+            logger.error(f"Критическая ошибка при отправке уведомления {notification_id}: {e}")
+            return False
     
     async def send_immediate_notification(
         self, 

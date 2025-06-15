@@ -16,6 +16,9 @@ from .config.settings import settings
 from .presentation.telegram.bot import PrakritiTelegramBot
 from .services.client_service import ClientService
 from .services.subscription_service import SubscriptionService
+from .services.notification_service import NotificationService
+from .services.scheduler_service import SchedulerService
+from .services.telegram_sender_service import TelegramSenderService
 
 # Настройка логирования
 logging.basicConfig(
@@ -45,6 +48,9 @@ class PrakritiApplication:
         self.telegram_bot: Optional[PrakritiTelegramBot] = None
         self.client_service: Optional[ClientService] = None
         self.subscription_service: Optional[SubscriptionService] = None
+        self.notification_service: Optional[NotificationService] = None
+        self.scheduler_service: Optional[SchedulerService] = None
+        self.telegram_sender: Optional[TelegramSenderService] = None
         self.is_running = False
         
         logger.info("PrakritiApplication инициализировано")
@@ -60,9 +66,11 @@ class PrakritiApplication:
             logger.info("Инициализация временных репозиториев в памяти...")
             from .repositories.in_memory_client_repository import InMemoryClientRepository
             from .repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
+            from .repositories.in_memory_notification_repository import InMemoryNotificationRepository
             
             client_repository = InMemoryClientRepository()
             subscription_repository = InMemorySubscriptionRepository()
+            notification_repository = InMemoryNotificationRepository()
             
             # Инициализируем сервисы
             logger.info("Инициализация ClientService...")
@@ -70,6 +78,24 @@ class PrakritiApplication:
             
             logger.info("Инициализация SubscriptionService...")
             self.subscription_service = SubscriptionService(subscription_repository)
+            
+            logger.info("Инициализация TelegramSenderService...")
+            self.telegram_sender = TelegramSenderService()
+            
+            logger.info("Инициализация NotificationService...")
+            self.notification_service = NotificationService(
+                notification_repository, 
+                self.client_service, 
+                self.subscription_service,
+                self.telegram_sender
+            )
+            
+            logger.info("Инициализация SchedulerService...")
+            self.scheduler_service = SchedulerService(
+                self.client_service,
+                self.subscription_service,
+                self.notification_service
+            )
             
             # Инициализируем Telegram Bot
             logger.info("Инициализация Telegram Bot...")
@@ -99,6 +125,11 @@ class PrakritiApplication:
         self.is_running = True
         
         try:
+            # Запускаем планировщик
+            if self.scheduler_service:
+                logger.info("Запуск планировщика задач...")
+                await self.scheduler_service.start()
+            
             # Запускаем Telegram Bot в polling режиме
             if self.telegram_bot:
                 await self.telegram_bot.start_polling()
@@ -114,6 +145,11 @@ class PrakritiApplication:
         logger.info("Остановка Practiti Backend...")
         
         self.is_running = False
+        
+        # Останавливаем планировщик
+        if self.scheduler_service:
+            logger.info("Остановка планировщика задач...")
+            await self.scheduler_service.stop()
         
         # Останавливаем Telegram Bot
         if self.telegram_bot:
