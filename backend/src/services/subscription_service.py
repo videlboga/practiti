@@ -83,6 +83,19 @@ class SubscriptionService(SubscriptionServiceProtocol):
         
         return subscription
     
+    async def get_all_subscriptions(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Subscription]:
+        """
+        Получить все абонементы.
+        
+        Args:
+            limit: Максимальное количество абонементов
+            offset: Смещение для пагинации
+            
+        Returns:
+            Список всех абонементов
+        """
+        return await self._repository.list_subscriptions(limit=limit, offset=offset)
+    
     async def get_client_subscriptions(self, client_id: str) -> List[Subscription]:
         """
         Получить все абонементы клиента.
@@ -94,6 +107,18 @@ class SubscriptionService(SubscriptionServiceProtocol):
             Список абонементов клиента
         """
         return await self._repository.get_subscriptions_by_client_id(client_id)
+    
+    async def get_subscriptions_by_status(self, status: SubscriptionStatus) -> List[Subscription]:
+        """
+        Получить абонементы по статусу.
+        
+        Args:
+            status: Статус абонементов
+            
+        Returns:
+            Список абонементов с указанным статусом
+        """
+        return await self._repository.get_subscriptions_by_status(status)
     
     async def get_active_subscription(self, client_id: str) -> Optional[Subscription]:
         """

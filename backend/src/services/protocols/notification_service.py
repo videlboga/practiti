@@ -110,6 +110,20 @@ class NotificationServiceProtocol(ABC):
         pass
     
     @abstractmethod
+    async def get_all_notifications(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Notification]:
+        """
+        Получить все уведомления.
+        
+        Args:
+            limit: Максимальное количество уведомлений
+            offset: Смещение для пагинации
+            
+        Returns:
+            Список всех уведомлений
+        """
+        pass
+    
+    @abstractmethod
     async def get_client_notifications(
         self, 
         client_id: str, 

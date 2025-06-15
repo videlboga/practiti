@@ -138,6 +138,19 @@ class NotificationService(NotificationServiceProtocol):
         
         return notification
     
+    async def get_all_notifications(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Notification]:
+        """
+        Получить все уведомления.
+        
+        Args:
+            limit: Максимальное количество уведомлений
+            offset: Смещение для пагинации
+            
+        Returns:
+            Список всех уведомлений
+        """
+        return await self._repository.list_notifications(limit=limit, offset=offset)
+    
     async def get_client_notifications(
         self, 
         client_id: str, 

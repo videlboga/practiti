@@ -52,6 +52,20 @@ class SubscriptionServiceProtocol(ABC):
         pass
     
     @abstractmethod
+    async def get_all_subscriptions(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Subscription]:
+        """
+        Получить все абонементы.
+        
+        Args:
+            limit: Максимальное количество абонементов
+            offset: Смещение для пагинации
+            
+        Returns:
+            Список всех абонементов
+        """
+        pass
+    
+    @abstractmethod
     async def get_client_subscriptions(self, client_id: str) -> List[Subscription]:
         """
         Получить все абонементы клиента.
