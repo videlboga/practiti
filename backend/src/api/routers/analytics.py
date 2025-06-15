@@ -48,10 +48,22 @@ async def get_subscription_service() -> SubscriptionServiceProtocol:
 async def get_notification_service() -> NotificationServiceProtocol:
     """Получение сервиса уведомлений."""
     from ...repositories.in_memory_notification_repository import InMemoryNotificationRepository
+    from ...repositories.in_memory_client_repository import InMemoryClientRepository
+    from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
     from ...services.notification_service import NotificationService
+    from ...services.client_service import ClientService
+    from ...services.subscription_service import SubscriptionService
     
-    repository = InMemoryNotificationRepository()
-    return NotificationService(repository)
+    # Создаем репозитории
+    notification_repository = InMemoryNotificationRepository()
+    client_repository = InMemoryClientRepository()
+    subscription_repository = InMemorySubscriptionRepository()
+    
+    # Создаем сервисы
+    client_service = ClientService(client_repository)
+    subscription_service = SubscriptionService(subscription_repository)
+    
+    return NotificationService(notification_repository, client_service, subscription_service)
 
 
 @router.get("/overview", response_model=AnalyticsResponse)
