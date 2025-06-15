@@ -116,6 +116,21 @@ class PrakritiTelegramBot:
         self.application.add_handler(
             CommandHandler("clear_registration", self.command_handlers.clear_registration_command)
         )
+        self.application.add_handler(
+            CommandHandler("address", self.command_handlers.address_command)
+        )
+        self.application.add_handler(
+            CommandHandler("faq", self.command_handlers.faq_command)
+        )
+        self.application.add_handler(
+            CommandHandler("contact", self.command_handlers.contact_command)
+        )
+        self.application.add_handler(
+            CommandHandler("prices", self.command_handlers.prices_command)
+        )
+        self.application.add_handler(
+            CommandHandler("schedule", self.command_handlers.schedule_command)
+        )
         
         # ConversationHandler для регистрации
         registration_conv_handler = ConversationHandler(
@@ -188,6 +203,10 @@ class PrakritiTelegramBot:
             BotCommand("help", "📋 Справка по командам"),
             BotCommand("info", "🧘‍♀️ О студии"),
             BotCommand("register", "📝 Регистрация"),
+            BotCommand("address", "📍 Адрес и контакты"),
+            BotCommand("faq", "❓ Частые вопросы"),
+            BotCommand("prices", "💰 Цены"),
+            BotCommand("schedule", "📅 Расписание"),
             BotCommand("contact", "📞 Контакты"),
         ]
         
