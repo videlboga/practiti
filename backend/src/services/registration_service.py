@@ -331,6 +331,26 @@ class RegistrationService:
             # Создаем клиента через ClientService
             client = await self.client_service.create_client(client_data)
             
+            # Уведомляем администратора о новой записи
+            try:
+                from ..services.telegram_sender_service import TelegramSenderService
+                from ..config.settings import settings as _settings
+
+                if _settings.telegram_admin_chat_id:
+                    sender = TelegramSenderService()
+                    # Формируем дружелюбное сообщение
+                    message = (
+                        f"🌱 Новая запись на занятие!\n"
+                        f"Имя: {client.name}\n"
+                        f"Телефон: {client.phone}\n"
+                        f"Опыт йоги: {'есть' if client.yoga_experience else 'нет'}\n"
+                        f"Интенсивность: {client.intensity_preference}\n"
+                        f"Время: {client.time_preference}"
+                    )
+                    await sender.send_custom_message(int(_settings.telegram_admin_chat_id), message)
+            except Exception as e:  # pragma: no cover
+                logger.warning(f"Не удалось отправить уведомление администратору: {e}")
+            
             # Помечаем регистрацию как завершенную
             registration.current_state = RegistrationState.COMPLETED
             
