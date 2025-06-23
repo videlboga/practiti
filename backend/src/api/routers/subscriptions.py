@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import logging
 import math
+from datetime import date
 
 from ..models import (
     SubscriptionCreateRequest, SubscriptionResponse, UseClassRequest,
@@ -17,21 +18,37 @@ from ..models import (
 from ...services.protocols.subscription_service import SubscriptionServiceProtocol
 from ...models.subscription import SubscriptionStatus, SubscriptionType
 from ...utils.exceptions import BusinessLogicError, ValidationError
+from ...config.settings import settings
+from ...services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+# ---------- Фабрики для DI ----------
+
+
+def _create_subscription_repository():
+    """Создать репозиторий в зависимости от окружения."""
+    if settings.environment == "testing":
+        from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
+        return InMemorySubscriptionRepository()
+    else:
+        from ...repositories.google_sheets_subscription_repository import GoogleSheetsSubscriptionRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        return GoogleSheetsSubscriptionRepository(GoogleSheetsClient())
+
+
+def _build_subscription_service() -> SubscriptionServiceProtocol:
+    """Создать экземпляр SubscriptionService."""
+    return SubscriptionService(_create_subscription_repository())
+
+
 # Dependency injection для сервисов
 async def get_subscription_service() -> SubscriptionServiceProtocol:
     """Получение сервиса абонементов."""
-    # Временная заглушка - в реальном приложении будет DI
-    from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
-    from ...services.subscription_service import SubscriptionService
-    
-    repository = InMemorySubscriptionRepository()
-    return SubscriptionService(repository)
+    return _build_subscription_service()
 
 
 @router.get("/", response_model=PaginatedResponse)
@@ -57,7 +74,7 @@ async def get_subscriptions(
         
         # Дополнительная фильтрация по типу
         if subscription_type:
-            subscriptions = [s for s in subscriptions if s.subscription_type == subscription_type]
+            subscriptions = [s for s in subscriptions if s.type == subscription_type]
         
         # Пагинация
         total = len(subscriptions)
@@ -120,11 +137,8 @@ async def create_subscription(
         
         create_data = SubscriptionCreateData(
             client_id=request.client_id,
-            subscription_type=request.subscription_type,
-            classes_total=request.classes_total,
-            price_paid=request.price_paid,
-            payment_method=request.payment_method,
-            notes=request.notes
+            type=request.subscription_type,
+            # start_date не передаём, будет default_factory=date.today()
         )
         
         subscription = await subscription_service.create_subscription(create_data)
@@ -160,13 +174,7 @@ async def use_class(
                 detail="ID абонемента в URL не совпадает с данными запроса"
             )
         
-        subscription = await subscription_service.use_class(
-            subscription_id=subscription_id,
-            class_date=request.class_date,
-            class_type=request.class_type,
-            instructor=request.instructor,
-            notes=request.notes
-        )
+        subscription = await subscription_service.use_class(subscription_id)
         
         logger.info(f"Занятие использовано: {subscription_id}")
         return SubscriptionResponse.from_orm(subscription)
@@ -231,3 +239,29 @@ async def cancel_subscription(
     except Exception as e:
         logger.error(f"Ошибка отмены абонемента {subscription_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка отмены абонемента")
+
+
+# ---------------------------------------------------------------------------
+#  Подтверждение оплаты
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{subscription_id}/confirm-payment", response_model=SubscriptionResponse)
+async def confirm_subscription_payment(
+    subscription_id: str,
+    subscription_service: SubscriptionServiceProtocol = Depends(get_subscription_service)
+) -> SubscriptionResponse:
+    """Подтвердить оплату и активировать абонемент."""
+    try:
+        logger.info(f"Подтверждение оплаты абонемента: {subscription_id}")
+
+        subscription = await subscription_service.confirm_payment(subscription_id)
+
+        return SubscriptionResponse.from_orm(subscription)
+
+    except BusinessLogicError as e:
+        logger.warning(f"Бизнес-ошибка подтверждения оплаты: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Ошибка подтверждения оплаты {subscription_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка подтверждения оплаты")
