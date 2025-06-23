@@ -50,27 +50,27 @@ class Booking(BaseModel):
     @field_validator('class_date')
     @classmethod
     def validate_class_date(cls, v: datetime) -> datetime:
-        """Валидация даты занятия."""
-        # Нельзя записаться на занятие в прошлом
-        if v < datetime.now():
+        """Валидация даты занятия (поддержка aware/naive)."""
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        # Приводим оба значения к UTC naïve для корректного сравнения
+        if v.tzinfo is not None:
+            v_cmp = v.astimezone(timezone.utc).replace(tzinfo=None)
+        else:
+            v_cmp = v
+        if now.tzinfo is not None:
+            now_cmp = now.astimezone(timezone.utc).replace(tzinfo=None)
+        else:
+            now_cmp = now
+        if v_cmp < now_cmp:
             raise ValueError('Нельзя записаться на занятие в прошлом')
-        
         return v
     
     @field_validator('class_type')
     @classmethod
     def validate_class_type(cls, v: str) -> str:
-        """Валидация типа занятия."""
-        allowed_types = [
-            'хатха', 'виньяса', 'аштанга', 'кундалини', 
-            'инь', 'йога-нидра', 'пранаяма', 'общий'
-        ]
-        
-        class_type = v.lower().strip()
-        if class_type not in allowed_types:
-            raise ValueError(f'Тип занятия должен быть одним из: {", ".join(allowed_types)}')
-        
-        return class_type
+        """Валидация типа занятия (MVP: допускаем любой не пустой тип)."""
+        return v.strip()
     
     @property
     def is_upcoming(self) -> bool:
