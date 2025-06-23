@@ -33,7 +33,13 @@ class TelegramSenderService:
         self._bot: Optional[Bot] = None
         self._is_enabled = False
         
-        # Инициализируем бота, если есть токен
+        # 🚧 Окружение testing — отключаем реальные запросы к Telegram вне зависимости от токена
+        if settings.environment == "testing":
+            logger.info("TelegramSenderService запущен в тестовом окружении — отправка сообщений отключена")
+            # _is_enabled остаётся False, выходим раньше
+            return
+
+        # Инициализируем бота, если указан валидный токен (production/dev)
         telegram_config = settings.get_telegram_config()
         if telegram_config.bot_token and telegram_config.bot_token != "fake_token_for_tests":
             try:
@@ -44,7 +50,7 @@ class TelegramSenderService:
                 logger.warning(f"Не удалось инициализировать Telegram Bot: {e}")
                 self._is_enabled = False
         else:
-            logger.info("TelegramSenderService инициализирован в тестовом режиме")
+            logger.info("TelegramSenderService инициализирован без рабочего токена — отправка сообщений отключена")
             self._is_enabled = False
     
     async def send_notification_to_client(

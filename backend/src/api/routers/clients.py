@@ -12,34 +12,67 @@ import math
 
 from ..models import (
     ClientCreateRequest, ClientUpdateRequest, ClientResponse, ClientSearchRequest,
-    APIResponse, PaginationParams, PaginatedResponse
+    APIResponse, PaginationParams, PaginatedResponse, SubscriptionResponse
 )
 from ...services.protocols.client_service import ClientServiceProtocol
 from ...models.client import ClientStatus
 from ...utils.exceptions import BusinessLogicError, ValidationError
+from functools import lru_cache
+from ...services.client_service import ClientService
+from ...config.settings import settings
+from .subscriptions import _build_subscription_service
+from ...services.protocols.subscription_service import SubscriptionServiceProtocol
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-# Dependency injection для сервисов
-# TODO: Реализовать через DI контейнер
+# Функции для DI
+def _create_repository():
+    """Создаёт конкретный репозиторий в зависимости от окружения."""
+    if settings.environment == "testing":
+        from ...repositories.in_memory_client_repository import InMemoryClientRepository
+        return InMemoryClientRepository()
+    else:
+        from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        return GoogleSheetsClientRepository(GoogleSheetsClient())
+
+
+def _build_client_service() -> ClientServiceProtocol:
+    """Фабрика, создающая singleton-экземпляр ClientService."""
+    # Используем репозиторий в памяти для тестовой среды
+    return ClientService(_create_repository())
+
+
+@lru_cache(maxsize=1)
+def _get_cached_client_service() -> ClientServiceProtocol:
+    return _build_client_service()
+
+
 async def get_client_service() -> ClientServiceProtocol:
-    """Получение сервиса клиентов."""
-    # Временная заглушка - в реальном приложении будет DI
-    from ...repositories.in_memory_client_repository import InMemoryClientRepository
-    from ...services.client_service import ClientService
-    
-    repository = InMemoryClientRepository()
-    return ClientService(repository)
+    """Dependency-provider для FastAPI.
+
+    В production-режиме используем кэш (singleton-сервис) для производительности.
+    В testing-режиме кэш отключаем, чтобы каждый тест получал "свежий" инстанс
+    и не возникало побочных эффектов из-за общего состояния между тестами.
+    """
+
+    if settings.environment == "testing":  # без кэша – изолированные тесты
+        return _build_client_service()
+
+    # для остальных окружений отдаём singleton
+    return _get_cached_client_service()
 
 
 @router.get("/", response_model=PaginatedResponse)
 async def get_clients(
     page: int = Query(1, ge=1, description="Номер страницы"),
-    limit: int = Query(20, ge=1, le=100, description="Количество на странице"),
-    status: Optional[ClientStatus] = Query(None, description="Фильтр по статусу"),
+    limit: int = Query(20, ge=1, le=100, description="Количество в выдаче"),
+    page_size: Optional[int] = Query(None, alias="pageSize", ge=1, le=100, description="Альтернативное имя параметра limit из фронтенда"),
+    search: Optional[str] = Query(None, description="Поисковый запрос"),
+    status: Optional[str] = Query(None, description="Фильтр по статусу"),
     client_service: ClientServiceProtocol = Depends(get_client_service)
 ) -> PaginatedResponse:
     """
@@ -48,6 +81,8 @@ async def get_clients(
     Args:
         page: Номер страницы
         limit: Количество элементов на странице
+        page_size: Альтернативное имя параметра limit из фронтенда
+        search: Поисковый запрос
         status: Фильтр по статусу клиента
         client_service: Сервис клиентов
         
@@ -55,13 +90,32 @@ async def get_clients(
         Список клиентов с пагинацией
     """
     try:
-        logger.info(f"Запрос списка клиентов: page={page}, limit={limit}, status={status}")
+        # Привязываем альтернативное имя параметра
+        if page_size is not None:
+            limit = page_size
+
+        logger.info(f"Запрос списка клиентов: page={page}, limit={limit}, status={status}, search={search}")
         
-        # Получаем клиентов по статусу или всех
-        if status:
-            clients = await client_service.get_clients_by_status(status)
+        # Приводим статус к Enum, если передан и не пустая строка
+        status_enum: Optional[ClientStatus] = None
+        if status and str(status).strip():
+            try:
+                status_enum = ClientStatus(status)
+            except ValueError:
+                # Неизвестный статус – игнорируем фильтр
+                logger.warning(f"Неизвестный статус клиента: {status}")
+
+        # Получаем список клиентов
+        if search and search.strip():
+            clients = await client_service.search_clients(search.strip())
+            # При необходимости фильтруем по статусу
+            if status_enum:
+                clients = [c for c in clients if c.status == status_enum]
         else:
-            clients = await client_service.get_all_clients()
+            if status_enum:
+                clients = await client_service.get_clients_by_status(status_enum)
+            else:
+                clients = await client_service.get_all_clients()
         
         # Пагинация
         total = len(clients)
@@ -71,7 +125,7 @@ async def get_clients(
         
         # Конвертируем в response модели
         client_responses = [
-            ClientResponse.from_orm(client) for client in paginated_clients
+            ClientResponse.model_validate(client, from_attributes=True) for client in paginated_clients
         ]
         
         return PaginatedResponse(
@@ -109,7 +163,7 @@ async def get_client(
         if not client:
             raise HTTPException(status_code=404, detail="Клиент не найден")
         
-        return ClientResponse.from_orm(client)
+        return ClientResponse.model_validate(client, from_attributes=True)
         
     except BusinessLogicError as e:
         logger.warning(f"Клиент не найден: {client_id}")
@@ -156,7 +210,7 @@ async def create_client(
         client = await client_service.create_client(create_data)
         
         logger.info(f"Клиент создан: {client.id}")
-        return ClientResponse.from_orm(client)
+        return ClientResponse.model_validate(client, from_attributes=True)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка бизнес-логики при создании клиента: {e}")
@@ -210,7 +264,7 @@ async def update_client(
         client = await client_service.update_client(client_id, update_data)
         
         logger.info(f"Клиент обновлен: {client_id}")
-        return ClientResponse.from_orm(client)
+        return ClientResponse.model_validate(client, from_attributes=True)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка бизнес-логики при обновлении клиента: {e}")
@@ -298,7 +352,7 @@ async def search_clients(
         
         # Конвертируем в response модели
         client_responses = [
-            ClientResponse.from_orm(client) for client in paginated_clients
+            ClientResponse.model_validate(client, from_attributes=True) for client in paginated_clients
         ]
         
         return PaginatedResponse(
@@ -335,7 +389,7 @@ async def activate_client(
         client = await client_service.activate_client(client_id)
         
         logger.info(f"Клиент активирован: {client_id}")
-        return ClientResponse.from_orm(client)
+        return ClientResponse.model_validate(client, from_attributes=True)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка при активации клиента: {e}")
@@ -366,11 +420,25 @@ async def deactivate_client(
         client = await client_service.deactivate_client(client_id)
         
         logger.info(f"Клиент деактивирован: {client_id}")
-        return ClientResponse.from_orm(client)
+        return ClientResponse.model_validate(client, from_attributes=True)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка при деактивации клиента: {e}")
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Ошибка деактивации клиента {client_id}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка деактивации клиента") 
+        raise HTTPException(status_code=500, detail="Ошибка деактивации клиента")
+
+
+@router.get("/{client_id}/subscriptions", response_model=List[SubscriptionResponse])
+async def get_client_subscriptions(
+    client_id: str,
+    subscription_service: SubscriptionServiceProtocol = Depends(_build_subscription_service),
+):
+    """Получить абонементы конкретного клиента."""
+    try:
+        subs = await subscription_service.get_client_subscriptions(client_id)
+        return [SubscriptionResponse.from_orm(s) for s in subs]
+    except Exception as e:
+        logger.error(f"Ошибка получения абонементов клиента {client_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения абонементов клиента") 
