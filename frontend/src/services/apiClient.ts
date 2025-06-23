@@ -52,7 +52,13 @@ export const getSubscriptionsByClientId = async (clientId: string): Promise<Subs
 };
 
 export const createSubscription = async (sub: SubscriptionCreateData): Promise<Subscription> => {
-  const { data } = await api.post<Subscription>('/api/subscriptions', sub);
+  // Бэкенд ожидает subscription_type, поэтому маппим поле
+  const payload = {
+    client_id: sub.client_id,
+    subscription_type: sub.type,
+    // Дополнительные поля пока не требуются (MVP)
+  } as any;
+  const { data } = await api.post<Subscription>('/api/subscriptions', payload);
   return data;
 };
 
@@ -82,7 +88,7 @@ export interface GetBookingsParams {
 }
 
 export const getBookings = async (params: GetBookingsParams = {}): Promise<Booking[]> => {
-  const { data } = await api.get<Booking[]>('/api/bookings', { params });
+  const { data } = await api.get<Booking[]>('/api/bookings/', { params });
   return data;
 };
 
@@ -91,7 +97,7 @@ export const getBookingsByClientId = async (clientId: string): Promise<Booking[]
 };
 
 export const createBooking = async (booking: BookingCreateData): Promise<Booking> => {
-  const { data } = await api.post<Booking>('/api/bookings', booking);
+  const { data } = await api.post<Booking>('/api/bookings/', booking);
   return data;
 };
 

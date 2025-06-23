@@ -5,9 +5,9 @@
 Принцип CyberKitty: простота превыше всего.
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 
 from ..models.client import ClientStatus
@@ -42,13 +42,18 @@ class PaginatedResponse(BaseModel):
 # ===== КЛИЕНТЫ =====
 
 class ClientCreateRequest(BaseModel):
-    """Запрос на создание клиента."""
+    """Запрос на создание клиента (админка)."""
+
     name: str = Field(..., min_length=2, max_length=100, description="Имя клиента")
     phone: str = Field(..., description="Телефон в формате +7XXXXXXXXXX")
-    telegram_id: int = Field(..., description="Telegram ID")
-    yoga_experience: bool = Field(..., description="Есть ли опыт йоги")
-    intensity_preference: str = Field(..., description="Предпочтения по интенсивности")
-    time_preference: str = Field(..., description="Предпочтения по времени")
+
+    # Необязательные
+    telegram_id: Optional[int] = Field(None, description="Telegram ID")
+    yoga_experience: bool = Field(False, description="Есть ли опыт йоги")
+    intensity_preference: str = Field("любая", description="Предпочтения по интенсивности")
+    time_preference: str = Field("любое", description="Предпочтения по времени")
+
+    # Дополнительные поля
     age: Optional[int] = Field(None, ge=16, le=100, description="Возраст")
     injuries: Optional[str] = Field(None, max_length=500, description="Травмы и ограничения")
     goals: Optional[str] = Field(None, max_length=500, description="Цели занятий")
@@ -74,7 +79,7 @@ class ClientResponse(BaseModel):
     id: str
     name: str
     phone: str
-    telegram_id: int
+    telegram_id: Optional[str | int] = None
     yoga_experience: bool
     intensity_preference: str
     time_preference: str
@@ -87,6 +92,17 @@ class ClientResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    # допускаем '', None -> None; строки с цифрами -> int
+    @field_validator('telegram_id', mode='before')
+    def _validate_telegram_id(cls, v):  # noqa: D401
+        if v in (None, '', 'null', 'None'):
+            return None
+        # допускаем как строку, так и int
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return str(v) if v is not None else None
 
 
 class ClientSearchRequest(BaseModel):
@@ -101,12 +117,17 @@ class ClientSearchRequest(BaseModel):
 # ===== АБОНЕМЕНТЫ =====
 
 class SubscriptionCreateRequest(BaseModel):
-    """Запрос на создание абонемента."""
+    """Запрос на создание абонемента (упрощён для MVP)."""
+
     client_id: str = Field(..., description="ID клиента")
     subscription_type: SubscriptionType = Field(..., description="Тип абонемента")
-    classes_total: int = Field(..., ge=1, le=50, description="Общее количество занятий")
-    price_paid: float = Field(..., ge=0, description="Оплаченная сумма")
-    payment_method: str = Field(..., max_length=50, description="Способ оплаты")
+
+    # Поля ниже сделаны необязательными, чтобы фронтенд мог отправлять
+    # только минимальный набор данных. При необходимости бизнес-логика
+    # может проставить значения по-умолчанию.
+    classes_total: Optional[int] = Field(None, ge=1, le=50, description="Общее количество занятий")
+    price_paid: Optional[float] = Field(None, ge=0, description="Оплаченная сумма")
+    payment_method: Optional[str] = Field(None, max_length=50, description="Способ оплаты")
     notes: Optional[str] = Field(None, max_length=500, description="Заметки")
 
 
@@ -114,18 +135,17 @@ class SubscriptionResponse(BaseModel):
     """Ответ с данными абонемента."""
     id: str
     client_id: str
-    subscription_type: SubscriptionType
-    classes_total: int
-    classes_used: int
-    classes_remaining: int
-    price_paid: float
-    payment_method: str
+    type: SubscriptionType
+    total_classes: int
+    used_classes: int
+    remaining_classes: int
+    start_date: date
+    end_date: date
     status: SubscriptionStatus
-    start_date: datetime
-    end_date: datetime
-    notes: Optional[str]
     created_at: datetime
-    updated_at: datetime
+    price: int
+    payment_confirmed: bool
+    payment_confirmed_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -174,6 +194,27 @@ class NotificationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_notification(cls, notification):
+        """Создать response из доменной модели Notification."""
+        return cls(
+            id=notification.id,
+            client_id=notification.client_id,
+            notification_type=notification.type,  # Преобразуем type -> notification_type
+            title=notification.title,
+            message=notification.message,
+            priority=notification.priority,
+            status=notification.status,
+            scheduled_at=notification.scheduled_at,
+            sent_at=notification.sent_at,
+            delivered_at=notification.delivered_at,
+            failed_at=notification.failed_at,
+            retry_count=notification.retry_count,
+            metadata=notification.metadata,
+            created_at=notification.created_at,
+            updated_at=notification.updated_at
+        )
+
 
 class NotificationSearchRequest(BaseModel):
     """Запрос поиска уведомлений."""
@@ -219,4 +260,57 @@ class NotificationStatsResponse(BaseModel):
     delivered_notifications: int
     failed_notifications: int
     delivery_rate: float
-    notifications_by_type: Dict[str, int] 
+    notifications_by_type: Dict[str, int]
+
+
+# ===== БРОНИРОВАНИЯ =====
+
+class BookingCreateRequest(BaseModel):
+    """Запрос на создание записи на занятие."""
+
+    client_id: str = Field(..., description="ID клиента")
+    class_date: datetime = Field(..., description="Дата и время занятия")
+    class_type: str = Field(..., description="Тип занятия")
+    subscription_id: Optional[str] = Field(None, description="ID абонемента")
+    teacher_name: Optional[str] = Field(None, description="Имя преподавателя")
+    class_duration: int = Field(90, ge=30, le=180, description="Длительность занятия")
+    notes: Optional[str] = Field(None, max_length=500, description="Заметки")
+
+    def to_model(self):  # pragma: no cover
+        """Конвертация в доменную модель BookingCreateData."""
+        from ..models.booking import BookingCreateData
+
+        return BookingCreateData.model_validate(self.model_dump())
+
+
+class BookingResponse(BaseModel):
+    """Ответ с информацией о бронировании."""
+
+    id: str
+    client_id: str
+    class_date: datetime
+    class_type: str
+    status: str
+    subscription_id: Optional[str]
+    teacher_name: Optional[str]
+    class_duration: int
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BookingUpdateRequest(BaseModel):
+    """Запрос на обновление записи на занятие (частичное)."""
+
+    class_date: Optional[datetime] = Field(None, description="Дата и время занятия")
+    class_type: Optional[str] = Field(None, description="Тип занятия")
+    status: Optional[str] = Field(None, description="Статус записи")
+    teacher_name: Optional[str] = Field(None, description="Имя преподавателя")
+    class_duration: Optional[int] = Field(None, ge=30, le=180, description="Длительность занятия")
+    notes: Optional[str] = Field(None, max_length=500, description="Заметки")
+
+    def to_update_data(self):  # pragma: no cover
+        from ..models.booking import BookingUpdateData
+        return BookingUpdateData.model_validate(self.model_dump(exclude_unset=True)) 

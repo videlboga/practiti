@@ -1,10 +1,9 @@
 export type SubscriptionType =
   | 'trial'
   | 'single'
-  | 'newbie4'
-  | 'regular4'
-  | 'regular8'
-  | 'regular12'
+  | 'package_4'
+  | 'package_8'
+  | 'package_12'
   | 'unlimited';
 
 export type SubscriptionStatus = 'pending' | 'active' | 'expired' | 'exhausted' | 'inactive';

@@ -69,7 +69,25 @@ class Booking(BaseModel):
     @field_validator('class_type')
     @classmethod
     def validate_class_type(cls, v: str) -> str:
-        """Валидация типа занятия (MVP: допускаем любой не пустой тип)."""
+        """Валидация типа занятия.
+
+        Допускаем только предопределённый список, чтобы избежать опечаток.
+        Список расширен под нужды MVP-фронтенда.
+        """
+
+        allowed_types = {
+            "хатха",
+            "виньяса",
+            "стретчинг",
+            "йога-терапия",
+            "базовый класс",
+        }
+
+        v_clean = v.strip().lower()
+        if not v_clean or v_clean not in allowed_types:
+            raise ValueError("Недопустимый тип занятия")
+
+        # Возвращаем исходное значение без лишних пробелов (регистр сохраняем)
         return v.strip()
     
     @property

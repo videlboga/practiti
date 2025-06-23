@@ -34,7 +34,13 @@ def create_app() -> FastAPI:
     # CORS middleware для фронтенда
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # React dev server
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://localhost:5175",
+        ],  # React / Vite dev server (порт может сдвигаться)
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -66,12 +72,35 @@ def create_app() -> FastAPI:
         }
     
     # Подключение роутеров
-    from .routers import clients, subscriptions, notifications, analytics
+    from .routers import clients, subscriptions, notifications, analytics, bookings
     
     app.include_router(clients.router, prefix="/api/v1/clients", tags=["clients"])
     app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["subscriptions"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
     app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+    app.include_router(bookings.router, prefix="/api/v1", tags=["bookings"])
+    
+    # Временные алиасы без версии для обратной совместимости с фронтендом
+    app.include_router(clients.router, prefix="/api/clients", tags=["clients-alias"])
+    app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions-alias"])
+    app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications-alias"])
+    app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics-alias"])
+    app.include_router(bookings.router, prefix="/api", tags=["bookings-alias"])
+    
+    # -----------------------------
+    #  Алиас для метрик дашборда
+    # -----------------------------
+
+    from .routers.analytics import get_dashboard_metrics as _dashboard_metrics_handler
+
+    # Фронтенд обращается к /api/dashboard/metrics, поэтому добавляем ручной маршрут
+    app.add_api_route(
+        path="/api/dashboard/metrics",
+        endpoint=_dashboard_metrics_handler,
+        methods=["GET"],
+        tags=["analytics-alias"],
+        name="dashboard-metrics-alias",
+    )
     
     logger.info("FastAPI приложение создано")
     return app
@@ -86,8 +115,8 @@ if __name__ == "__main__":
     
     uvicorn.run(
         "backend.src.api.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=settings.api_host,
+        port=settings.api_port,
         reload=settings.debug,
-        log_level="info"
+        log_level=settings.log_level.lower(),
     ) 
