@@ -37,7 +37,7 @@ def sample_subscription():
         total_classes=4,
         used_classes=0,
         start_date=date.today(),
-        end_date=date.today() + timedelta(days=30),
+        end_date=date.today() + timedelta(days=60),
         price=3200,
         status=SubscriptionStatus.ACTIVE,
         payment_confirmed=True
@@ -62,7 +62,7 @@ class TestSubscriptionService:
             type=SubscriptionType.TRIAL,
             total_classes=1,
             start_date=date.today(),
-            end_date=date.today() + timedelta(days=14),
+            end_date=date.today() + timedelta(days=60),
             price=500,
             status=SubscriptionStatus.PENDING
         )
@@ -153,7 +153,7 @@ class TestSubscriptionService:
             total_classes=1,
             used_classes=0,
             start_date=date.today(),
-            end_date=date.today() + timedelta(days=14),
+            end_date=date.today() + timedelta(days=60),
             price=500,
             status=SubscriptionStatus.PENDING,  # Неактивный
             payment_confirmed=False
@@ -176,20 +176,18 @@ class TestSubscriptionService:
         """Тест расчета даты окончания абонемента."""
         start_date = date(2024, 1, 1)
         
-        # Пробный - 14 дней
+        # Пробный и разовое, пакетные – 60 дней
         assert subscription_service.calculate_subscription_end_date(
             SubscriptionType.TRIAL, start_date
-        ) == date(2024, 1, 15)
+        ) == date(2024, 3, 1)
         
-        # Разовое - 1 день
         assert subscription_service.calculate_subscription_end_date(
             SubscriptionType.SINGLE, start_date
-        ) == date(2024, 1, 2)
+        ) == date(2024, 3, 1)
         
-        # Пакетные - 30 дней
         assert subscription_service.calculate_subscription_end_date(
             SubscriptionType.PACKAGE_4, start_date
-        ) == date(2024, 1, 31)
+        ) == date(2024, 3, 1)
     
     def test_get_subscription_info(self, subscription_service):
         """Тест получения информации об абонементе."""
@@ -198,5 +196,5 @@ class TestSubscriptionService:
         assert info["type"] == "package_8"
         assert info["price"] == 7000
         assert info["classes"] == 8
-        assert info["duration_days"] == 30
+        assert info["duration_days"] == 60
         assert "8 занятий" in info["description"] 
