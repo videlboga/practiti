@@ -5,7 +5,7 @@
 Соответствует контракту SUBSCRIPTION CONTRACT из архитектуры.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Optional
 from uuid import uuid4
@@ -171,3 +171,22 @@ class SubscriptionUpdateData(BaseModel):
         if v is not None and v < 0:
             raise ValueError('Оставшиеся занятия не могут быть отрицательными')
         return v 
+
+# -----------------------------------------------------------------------------
+#  Доменные константы (используются репозиториями/сервисами и экспортируются
+#  для обратной совместимости). После миграции на централизованное хранение
+#  следует убрать дубли и импортировать из одного места.
+# -----------------------------------------------------------------------------
+
+# Параметры по умолчанию для каждого типа абонемента: кол-во занятий, срок (дни), цена
+SUBSCRIPTION_DETAILS = {
+    SubscriptionType.TRIAL:    {"classes": 1, "duration_days": 14, "price": 500},
+    SubscriptionType.SINGLE:   {"classes": 1, "duration_days": 30, "price": 1100},
+    SubscriptionType.PACKAGE_4:  {"classes": 4, "duration_days": 30, "price": 3200},
+    SubscriptionType.PACKAGE_8:  {"classes": 8, "duration_days": 30, "price": 7000},
+    SubscriptionType.PACKAGE_12: {"classes": 12, "duration_days": 30, "price": 9000},
+    SubscriptionType.UNLIMITED: {"classes": 9999, "duration_days": 30, "price": 10800},
+}
+
+# Синоним для старого кода, который импортировал SUBSCRIPTION_TYPES
+SUBSCRIPTION_TYPES = SUBSCRIPTION_DETAILS
