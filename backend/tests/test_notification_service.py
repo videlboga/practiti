@@ -50,12 +50,22 @@ def mock_subscription_service():
 
 
 @pytest.fixture
-def notification_service(notification_repository, mock_client_service, mock_subscription_service):
+def mock_telegram_sender():
+    """Мок Telegram sender service."""
+    sender = AsyncMock()
+    # Мокируем успешную отправку
+    sender.send_notification_to_client.return_value = (True, 12345, None)
+    return sender
+
+
+@pytest.fixture
+def notification_service(notification_repository, mock_client_service, mock_subscription_service, mock_telegram_sender):
     """Фикстура сервиса уведомлений."""
     return NotificationService(
         notification_repository=notification_repository,
         client_service=mock_client_service,
-        subscription_service=mock_subscription_service
+        subscription_service=mock_subscription_service,
+        telegram_sender=mock_telegram_sender
     )
 
 

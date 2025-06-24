@@ -47,7 +47,10 @@ async def setup_services():
     client_data = ClientCreateData(
         name="Анна Тестовая",
         phone="+79161234567",
-        telegram_id=123456789
+        telegram_id=123456789,
+        yoga_experience=True,
+        intensity_preference="средняя",
+        time_preference="утро"
     )
     test_client = await client_service.create_client(client_data)
     

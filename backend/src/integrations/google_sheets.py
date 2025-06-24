@@ -21,6 +21,21 @@ from ..utils.exceptions import GoogleSheetsError
 logger = get_logger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# GoogleSheetsClient
+# ---------------------------------------------------------------------------
+#
+#  • Часто создаётся в каждом запросе через factory-функции API-роутеров.
+#    Повторная аутентификация занимает 300-600 мс и при высокой нагрузке
+#    приводит к HTTP-тайм-аутиам на фронте (axios timeout 10 s).
+#  • Решение: реализуем примитивный синглтон-кэш на уровне процесса.
+#    Ключ кэша — пара (credentials_path, spreadsheet_id).
+#
+#  NB: потокобезопасность не критична – FastAPI default Uvicorn workers = 1
+#      в dev. Для production Gunicorn можно использовать preload-тип, где
+#      объект будет создан в мастер-процессе и унаследован воркерами.
+# ---------------------------------------------------------------------------
+
 class GoogleSheetsClient:
     """
     Клиент для работы с Google Sheets API.
@@ -28,6 +43,26 @@ class GoogleSheetsClient:
     Обеспечивает базовые операции чтения и записи данных.
     """
     
+    _instances: dict[str, "GoogleSheetsClient"] = {}
+
+    def __new__(cls, credentials_file: Optional[str] = None, spreadsheet_id: Optional[str] = None):  # noqa: D401
+        """Возвращает кэшированный экземпляр, если он уже создан."""
+
+        creds = credentials_file or settings.google_credentials_path
+        sheet_id = spreadsheet_id or settings.google_sheets_id
+        cache_key = f"{creds}|{sheet_id}"
+
+        if cache_key in cls._instances:
+            return cls._instances[cache_key]
+
+        instance = super().__new__(cls)
+        cls._instances[cache_key] = instance
+        return instance
+
+    # ------------------------------------------------------------------
+    # Инициализация
+    # ------------------------------------------------------------------
+
     def __init__(self, credentials_file: Optional[str] = None, spreadsheet_id: Optional[str] = None):
         """
         Инициализация клиента Google Sheets.
@@ -36,6 +71,10 @@ class GoogleSheetsClient:
             credentials_file: Путь к файлу с credentials
             spreadsheet_id: ID таблицы Google Sheets
         """
+        # Повторная инициализация недопустима – выходим, если атрибут уже есть
+        if hasattr(self, "_initialized") and self._initialized:
+            return
+
         self.credentials_file = credentials_file or settings.google_credentials_path
         self.spreadsheet_id = spreadsheet_id or settings.google_sheets_id
         self.scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
@@ -44,10 +83,13 @@ class GoogleSheetsClient:
         self._credentials = None
         
         logger.info(
-            "Initializing Google Sheets client",
+            "Initializing Google Sheets client (singleton)",
             spreadsheet_id=self.spreadsheet_id,
             credentials_file=self.credentials_file
         )
+
+        # Флаг, что объект уже полностью инициализирован
+        self._initialized = True
     
     @property
     def service(self):
@@ -400,4 +442,51 @@ class GoogleSheetsClient:
                 success=False,
                 error=error_msg
             )
-            raise GoogleSheetsError(error_msg, operation="get_info") 
+            raise GoogleSheetsError(error_msg, operation="get_info")
+
+    # ------------------------------------------------------------------
+    # Sheet helpers
+    # ------------------------------------------------------------------
+
+    async def ensure_sheet_exists(self, sheet_name: str) -> None:
+        """Создать лист, если он ещё не существует.
+
+        Args:
+            sheet_name: Имя листа, которое нужно гарантировать в таблице.
+        """
+        try:
+            # Проверяем список листов
+            info = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            existing_titles = {s["properties"]["title"] for s in info.get("sheets", [])}
+
+            if sheet_name in existing_titles:
+                return  # Уже есть
+
+            logger.info(f"Adding new sheet '{sheet_name}' to spreadsheet {self.spreadsheet_id}")
+
+            requests_body = {
+                "requests": [
+                    {
+                        "addSheet": {
+                            "properties": {
+                                "title": sheet_name
+                            }
+                        }
+                    }
+                ]
+            }
+
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id, body=requests_body
+            ).execute()
+
+            logger.info(f"Sheet '{sheet_name}' created successfully")
+
+        except HttpError as e:
+            error_msg = f"HTTP error creating sheet {sheet_name}: {e}"
+            logger.error(error_msg)
+            raise GoogleSheetsError(error_msg, operation="create_sheet")
+        except Exception as e:
+            error_msg = f"Unexpected error creating sheet {sheet_name}: {e}"
+            logger.error(error_msg)
+            raise GoogleSheetsError(error_msg, operation="create_sheet") 

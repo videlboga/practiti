@@ -60,7 +60,7 @@ const SubscriptionForm: React.FC<SubscriptionFormProps> = ({ clientId, onSuccess
       setLoading(false);
       onSuccess?.();
     } catch (err: any) {
-      setError('Ошибка при сохранении абонемента');
+      setError(err?.message || 'Ошибка при сохранении абонемента');
       setLoading(false);
     }
   };

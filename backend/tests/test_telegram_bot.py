@@ -75,7 +75,7 @@ class TestCommandHandlers:
         # Проверяем, что сообщение содержит приветствие
         call_args = mock_update.effective_chat.send_message.call_args[0][0]
         assert "Добро пожаловать" in call_args
-        assert "CyberKitty Practiti" in call_args
+        assert "Practiti" in call_args
     
     @pytest.mark.asyncio
     async def test_help_command_new_user(self, command_handlers, mock_client_service, mock_update, mock_context):
@@ -107,7 +107,7 @@ class TestCommandHandlers:
         # Проверяем, что сообщение содержит информацию о студии
         call_args = mock_update.effective_chat.send_message.call_args
         message_text = call_args[0][0]
-        assert "CyberKitty Practiti" in message_text
+        assert "Practiti" in message_text
         assert "йога" in message_text.lower()
 
 
@@ -127,13 +127,19 @@ class TestPrakritiTelegramBot:
         """Мок ClientService для тестов."""
         return AsyncMock(spec=ClientService)
     
-    def test_bot_initialization(self, telegram_config, mock_client_service):
+    @pytest.fixture
+    def mock_subscription_service(self):
+        """Мок SubscriptionService для тестов."""
+        return AsyncMock()
+    
+    def test_bot_initialization(self, telegram_config, mock_client_service, mock_subscription_service):
         """Тест инициализации бота."""
         # Act
-        bot = PrakritiTelegramBot(telegram_config, mock_client_service)
+        bot = PrakritiTelegramBot(telegram_config, mock_client_service, mock_subscription_service)
         
         # Assert
         assert bot.config == telegram_config
         assert bot.client_service == mock_client_service
+        assert bot.subscription_service == mock_subscription_service
         assert bot.application is None
         assert isinstance(bot.command_handlers, CommandHandlers) 

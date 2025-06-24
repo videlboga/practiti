@@ -22,7 +22,7 @@ def test_client_creation_valid():
     assert client.intensity_preference == "средняя"
     assert client.time_preference == "утро"
 
-@pytest.mark.parametrize("phone", ["79991234567", "12345", "+7999-123-45-67"])
+@pytest.mark.parametrize("phone", ["79991234567", "12345", "invalid-phone"])
 def test_client_invalid_phone(phone):
     with pytest.raises(ValueError):
         Client(

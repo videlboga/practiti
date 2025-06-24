@@ -52,10 +52,11 @@ class ClientService(ClientServiceProtocol):
             raise BusinessLogicError(f"Клиент с телефоном {data.phone} уже зарегистрирован")
         
         # Проверяем уникальность Telegram ID
-        existing_telegram = await self._repository.get_client_by_telegram_id(data.telegram_id)
-        if existing_telegram:
-            logger.warning(f"Клиент с Telegram ID {data.telegram_id} уже существует")
-            raise BusinessLogicError(f"Клиент с данным Telegram аккаунтом уже зарегистрирован")
+        if data.telegram_id is not None:
+            existing_telegram = await self._repository.get_client_by_telegram_id(data.telegram_id)
+            if existing_telegram:
+                logger.warning(f"Клиент с Telegram ID {data.telegram_id} уже существует")
+                raise BusinessLogicError("Клиент с данным Telegram аккаунтом уже зарегистрирован")
         
         # Сохраняем в репозитории
         saved_client = await self._repository.save_client(data)

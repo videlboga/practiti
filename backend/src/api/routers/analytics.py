@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, Any
 import logging
 from datetime import datetime, timedelta
+import sys
 
 from ..models import (
     AnalyticsResponse, ClientStatsResponse, SubscriptionStatsResponse, 
@@ -42,24 +43,45 @@ router = APIRouter()
 # --- Вспомогательные фабрики ---
 
 def _build_client_service() -> ClientServiceProtocol:
-    from ...repositories.in_memory_client_repository import InMemoryClientRepository
+    """Фабрика ClientService в зависимости от окружения."""
+
     from ...services.client_service import ClientService
 
-    return ClientService(InMemoryClientRepository())
+    # Во время pytest — in-memory, иначе Google Sheets
+    if "pytest" in sys.modules:
+        from ...repositories.in_memory_client_repository import InMemoryClientRepository
+        repo = InMemoryClientRepository()
+    else:
+        from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        repo = GoogleSheetsClientRepository(GoogleSheetsClient())
+
+    return ClientService(repo)
 
 
 def _build_subscription_service() -> SubscriptionServiceProtocol:
-    from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
+    """Фабрика SubscriptionService – Google Sheets в проде, In-Memory в тестах."""
+
     from ...services.subscription_service import SubscriptionService
 
-    return SubscriptionService(InMemorySubscriptionRepository())
+    # Во время тестов — in-memory, иначе Google Sheets
+    if "pytest" in sys.modules:
+        from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
+        repo = InMemorySubscriptionRepository()
+    else:
+        from ...repositories.google_sheets_subscription_repository import GoogleSheetsSubscriptionRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        repo = GoogleSheetsSubscriptionRepository(GoogleSheetsClient())
+
+    return SubscriptionService(repo)
 
 
 def _build_notification_service() -> NotificationServiceProtocol:
     from ...services.notification_service import NotificationService
     from ...services.telegram_sender_service import TelegramSenderService
 
-    if settings.environment == "testing":
+    # pytest → in-memory, иначе Google Sheets
+    if "pytest" in sys.modules:
         from ...repositories.in_memory_notification_repository import InMemoryNotificationRepository
         notif_repo = InMemoryNotificationRepository()
     else:

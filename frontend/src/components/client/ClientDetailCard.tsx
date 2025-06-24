@@ -11,6 +11,7 @@ interface ClientDetailCardProps {
   client: Client;
   onEdit?: (id: string) => void;
   onAddSubscription?: (id: string) => void;
+  onAddBooking?: (id: string) => void;
   onGiftClass?: (id: string) => void;
   onDelete?: (id: string) => void;
   subscriptions?: import('../../types/subscription').Subscription[];
@@ -70,6 +71,7 @@ const ClientDetailCard: React.FC<ClientDetailCardProps> = ({
   client,
   onEdit,
   onAddSubscription,
+  onAddBooking,
   onGiftClass,
   onDelete,
   subscriptions = [],
@@ -117,6 +119,7 @@ const ClientDetailCard: React.FC<ClientDetailCardProps> = ({
       <div style={buttonRowStyle}>
         <Button onClick={() => onEdit?.(client.id)}>Редактировать</Button>
         <Button onClick={() => onAddSubscription?.(client.id)}>Добавить абонемент</Button>
+        <Button onClick={() => onAddBooking?.(client.id)}>Записать на занятие</Button>
         <Button onClick={() => onGiftClass?.(client.id)}>Подарить занятие</Button>
         <Button onClick={() => onDelete?.(client.id)} style={{ background: '#e57373' }}>Удалить</Button>
       </div>

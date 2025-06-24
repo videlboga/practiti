@@ -211,4 +211,33 @@ class SubscriptionServiceProtocol(ABC):
         Returns:
             Дата окончания
         """
+        pass
+    
+    @abstractmethod
+    async def cancel_subscription(self, subscription_id: str, reason: str | None = None) -> Subscription:
+        """
+        Отменить (аннулировать) абонемент.
+
+        Args:
+            subscription_id: ID абонемента
+            reason: Причина отмены (опционально, для логов)
+
+        Returns:
+            Обновленный абонемент со статусом CANCELLED
+        """
+        pass
+    
+    @abstractmethod
+    async def freeze_subscription(self, subscription_id: str, days: int, reason: str | None = None) -> Subscription:
+        """
+        Заморозить (приостановить) абонемент на указанное количество дней.
+
+        Args:
+            subscription_id: ID абонемента
+            days: Количество дней заморозки
+            reason: Причина (опционально)
+
+        Returns:
+            Обновленный абонемент
+        """
         pass 

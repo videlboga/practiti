@@ -29,6 +29,10 @@ def mock_client_service():
         id="test-client-1",
         name="Анна Петрова",
         phone="+79161234567",
+        telegram_id=123456789,
+        yoga_experience=True,
+        intensity_preference="средняя",
+        time_preference="утро",
         status=ClientStatus.ACTIVE
     )
     

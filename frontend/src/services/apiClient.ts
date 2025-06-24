@@ -8,9 +8,39 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8888';
 
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// ---------------------------------------------------------------------------
+// Интерцептор ошибок – преобразует HTTP-ошибку бэкенда в Error с понятным
+// сообщением (detail). Все сервисы и React-Query мутации смогут показывать
+// err.message напрямую.
+// ---------------------------------------------------------------------------
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    let message = 'Неизвестная ошибка';
+
+    if (error.response) {
+      // Ответ получен, но код не 2xx – берём detail из FastAPI
+      const data = error.response.data || {};
+      if (typeof data === 'string') {
+        message = data;
+      } else {
+        message = data.detail || data.message || error.response.statusText;
+      }
+    } else if (error.request) {
+      // Запрос ушёл, но ответа нет – возможно, сеть или CORS
+      message = 'Сервер не отвечает. Проверьте соединение или попробуйте позднее.';
+    } else if (error.message) {
+      message = error.message;
+    }
+
+    return Promise.reject(new Error(message));
+  },
+);
 
 export interface GetClientsParams {
   page?: number;
@@ -21,7 +51,7 @@ export interface GetClientsParams {
 
 // Клиенты
 export const getClients = async (params: GetClientsParams = {}): Promise<{ data: Client[]; total: number }> => {
-  const { data } = await api.get('/api/clients', { params });
+  const { data } = await api.get('/api/clients/', { params });
   // Бэкенд возвращает { items, total, ... }
   return {
     // @ts-ignore – runtime ok, типы совпадут после маппинга
@@ -36,13 +66,13 @@ export const getClientById = async (id: string): Promise<Client> => {
 };
 
 export const createClient = async (client: ClientCreateData): Promise<Client> => {
-  const { data } = await api.post<Client>('/api/clients', client);
+  const { data } = await api.post<Client>('/api/clients/', client);
   return data;
 };
 
 // Абонементы
 export const getSubscriptions = async (): Promise<Subscription[]> => {
-  const { data } = await api.get<Subscription[]>('/api/subscriptions');
+  const { data } = await api.get<Subscription[]>('/api/subscriptions/');
   return data;
 };
 
@@ -58,7 +88,7 @@ export const createSubscription = async (sub: SubscriptionCreateData): Promise<S
     subscription_type: sub.type,
     // Дополнительные поля пока не требуются (MVP)
   } as any;
-  const { data } = await api.post<Subscription>('/api/subscriptions', payload);
+  const { data } = await api.post<Subscription>('/api/subscriptions/', payload);
   return data;
 };
 

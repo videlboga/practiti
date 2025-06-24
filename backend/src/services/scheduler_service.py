@@ -162,6 +162,15 @@ class SchedulerService:
             replace_existing=True
         )
         
+        # Обработка завершенных занятий - каждые 15 минут
+        self._scheduler.add_job(
+            self._process_completed_classes,
+            trigger=IntervalTrigger(minutes=15),
+            id='process_completed_classes',
+            name='Обработка завершенных занятий',
+            replace_existing=True
+        )
+        
         logger.info("Периодические задачи зарегистрированы")
     
     async def schedule_class_reminder(
@@ -183,12 +192,16 @@ class SchedulerService:
         Returns:
             ID созданного задания
         """
-        reminder_time = class_date - timedelta(hours=reminder_hours_before)
-        
-        # Проверяем, что время напоминания в будущем
-        if reminder_time <= datetime.now():
-            logger.warning(f"Время напоминания {reminder_time} уже прошло")
+        # Если дата занятия уже в прошлом – невозможно создать напоминание
+        if class_date <= datetime.now():
+            logger.warning(f"Дата занятия {class_date} уже прошла – напоминание не планируется")
             return ""
+
+        reminder_time = class_date - timedelta(hours=reminder_hours_before)
+
+        # Если время напоминания уже прошло, переносим его на +1 секунду вперёд
+        if reminder_time <= datetime.now():
+            reminder_time = datetime.now() + timedelta(seconds=1)
         
         job_id = f"class_reminder_{client_id}_{class_date.strftime('%Y%m%d_%H%M')}"
         
@@ -290,15 +303,16 @@ class SchedulerService:
     
     # Периодические задачи
     
-    async def _process_scheduled_notifications(self) -> None:
+    async def _process_scheduled_notifications(self) -> int:
         """Обработка запланированных уведомлений."""
         try:
             processed_count = await self._notification_service.process_scheduled_notifications()
             if processed_count > 0:
                 logger.info(f"Обработано {processed_count} запланированных уведомлений")
-                
+            return processed_count
         except Exception as e:
             logger.error(f"Ошибка обработки запланированных уведомлений: {e}")
+            return 0
     
     async def _retry_failed_notifications(self) -> None:
         """Повторная отправка неудачных уведомлений."""
@@ -416,7 +430,7 @@ class SchedulerService:
             
             notification_data = {
                 'client_id': subscription.client_id,
-                'type': NotificationType.SUBSCRIPTION_EXPIRY,
+                'type': NotificationType.SUBSCRIPTION_EXPIRING,
                 'title': 'Ваш абонемент скоро истекает',
                 'message': f'Привет, {client.name}! 👋\n\n'
                           f'Ваш абонемент истекает {subscription.end_date.strftime("%d.%m.%Y")}\n'
@@ -450,7 +464,7 @@ class SchedulerService:
             
             notification_data = {
                 'client_id': client_id,
-                'type': NotificationType.SCHEDULE_REMINDER,
+                'type': NotificationType.GENERAL_INFO,
                 'title': f'Расписание на {date.strftime("%d.%m.%Y")}',
                 'message': f'Привет, {client.name}! 👋\n\n'
                           f'Расписание занятий на завтра:\n\n'
@@ -481,4 +495,20 @@ class SchedulerService:
             6: "🌅 10:00 - Медитативная практика\n🌟 12:00 - Инь-йога\n🌙 18:00 - Восстановительная йога"
         }
         
-        return schedules.get(weekday, "Расписание уточняется") 
+        return schedules.get(weekday, "Расписание уточняется")
+    
+    async def _process_completed_classes(self) -> None:
+        """
+        Обработать завершенные занятия для post-class автоматизации.
+        
+        Эта задача будет интегрирована с PostClassService когда он будет добавлен в main.py
+        """
+        try:
+            logger.info("Обработка завершенных занятий...")
+            
+            # TODO: Интеграция с PostClassService
+            # Пока что просто логируем
+            logger.info("Post-class автоматизация будет добавлена в следующем обновлении")
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки завершенных занятий: {e}") 

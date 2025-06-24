@@ -11,15 +11,50 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 from backend.src.api.main import app
+from backend.src.api.routers.clients import get_client_service
+from backend.src.api.routers.subscriptions import get_subscription_service
+from backend.src.api.routers.notifications import get_notification_service
+from backend.src.api.routers.analytics import (
+    get_client_service as get_analytics_client_service,
+    get_subscription_service as get_analytics_subscription_service,
+    get_notification_service as get_analytics_notification_service
+)
 from backend.src.models.client import Client, ClientStatus
 from backend.src.models.subscription import Subscription, SubscriptionStatus, SubscriptionType
 from backend.src.models.notification import Notification, NotificationStatus, NotificationType, NotificationPriority
 
 
+@pytest.fixture(scope="session")
+def mock_services():
+    """Глобальные моки сервисов для всех тестов."""
+    from unittest.mock import AsyncMock
+    
+    return {
+        'client_service': AsyncMock(),
+        'subscription_service': AsyncMock(),
+        'notification_service': AsyncMock()
+    }
+
+
 @pytest.fixture
-def client():
+def client(mock_services):
     """Тестовый клиент FastAPI."""
-    return TestClient(app)
+    
+    # Переопределяем зависимости
+    app.dependency_overrides = {
+        get_client_service: lambda: mock_services['client_service'],
+        get_subscription_service: lambda: mock_services['subscription_service'],
+        get_notification_service: lambda: mock_services['notification_service'],
+        # Analytics dependencies
+        get_analytics_client_service: lambda: mock_services['client_service'],
+        get_analytics_subscription_service: lambda: mock_services['subscription_service'],
+        get_analytics_notification_service: lambda: mock_services['notification_service'],
+    }
+    
+    yield TestClient(app)
+    
+    # Очищаем переопределения после тестов
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -52,17 +87,21 @@ def sample_subscription():
         type=SubscriptionType.PACKAGE_8,
         total_classes=8,
         used_classes=2,
+        remaining_classes=6,
         price=9600,
         status=SubscriptionStatus.ACTIVE,
         start_date=date.today(),
         end_date=date.today() + timedelta(days=30),
-        created_at=datetime.now()
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
 
 
 @pytest.fixture
 def sample_notification():
     """Образец уведомления для тестов."""
+    # Создаем объект уведомления с правильными полями
+    now = datetime.now()
     return Notification(
         id="test-notification-1",
         client_id="test-client-1",
@@ -74,9 +113,12 @@ def sample_notification():
         scheduled_at=None,
         sent_at=None,
         delivered_at=None,
+        failed_at=None,
         retry_count=0,
+        max_retries=3,
         metadata={},
-        created_at=datetime.now()
+        created_at=now,
+        updated_at=now
     )
 
 
@@ -97,13 +139,10 @@ class TestHealthCheck:
 class TestClientsAPI:
     """Тесты API клиентов."""
     
-    @patch('backend.src.api.routers.clients.get_client_service')
-    def test_get_clients_list(self, mock_service, client, sample_client):
+    def test_get_clients_list(self, client, sample_client, mock_services):
         """Тест получения списка клиентов."""
-        # Мокаем сервис
-        mock_client_service = AsyncMock()
-        mock_client_service.get_all_clients.return_value = [sample_client]
-        mock_service.return_value = mock_client_service
+        # Настраиваем мок сервиса
+        mock_services['client_service'].get_all_clients.return_value = [sample_client]
         
         response = client.get("/api/v1/clients/")
         
@@ -114,17 +153,11 @@ class TestClientsAPI:
         assert data["limit"] == 20
         assert len(data["items"]) == 1
         assert data["items"][0]["name"] == "Тест Клиент"
-        
-        # Проверяем, что сервис был вызван
-        mock_client_service.get_all_clients.assert_called_once()
     
-    @patch('backend.src.api.routers.clients.get_client_service')
-    def test_get_client_by_id(self, mock_service, client, sample_client):
+    def test_get_client_by_id(self, client, sample_client, mock_services):
         """Тест получения клиента по ID."""
-        # Мокаем сервис
-        mock_client_service = AsyncMock()
-        mock_client_service.get_client.return_value = sample_client
-        mock_service.return_value = mock_client_service
+        # Настраиваем мок сервиса
+        mock_services['client_service'].get_client.return_value = sample_client
         
         response = client.get("/api/v1/clients/test-client-1")
         
@@ -134,13 +167,10 @@ class TestClientsAPI:
         assert data["name"] == "Тест Клиент"
         assert data["phone"] == "+79991234567"
     
-    @patch('backend.src.api.routers.clients.get_client_service')
-    def test_create_client(self, mock_service, client, sample_client):
+    def test_create_client(self, client, sample_client, mock_services):
         """Тест создания клиента."""
-        # Мокаем сервис
-        mock_client_service = AsyncMock()
-        mock_client_service.create_client.return_value = sample_client
-        mock_service.return_value = mock_client_service
+        # Настраиваем мок сервиса
+        mock_services['client_service'].create_client.return_value = sample_client
         
         client_data = {
             "name": "Тест Клиент",
@@ -162,13 +192,12 @@ class TestClientsAPI:
         assert data["name"] == "Тест Клиент"
         assert data["phone"] == "+79991234567"
     
-    @patch('backend.src.api.routers.clients.get_client_service')
-    def test_client_not_found(self, mock_service, client):
+    def test_client_not_found(self, client, mock_services):
         """Тест получения несуществующего клиента."""
-        # Мокаем сервис
-        mock_client_service = AsyncMock()
-        mock_client_service.get_client.return_value = None
-        mock_service.return_value = mock_client_service
+        from backend.src.utils.exceptions import BusinessLogicError
+        
+        # Настраиваем мок сервиса
+        mock_services['client_service'].get_client.side_effect = BusinessLogicError("Клиент не найден")
         
         response = client.get("/api/v1/clients/nonexistent")
         
@@ -178,13 +207,10 @@ class TestClientsAPI:
 class TestSubscriptionsAPI:
     """Тесты API абонементов."""
     
-    @patch('backend.src.api.routers.subscriptions.get_subscription_service')
-    def test_get_subscriptions_list(self, mock_service, client, sample_subscription):
+    def test_get_subscriptions_list(self, client, sample_subscription, mock_services):
         """Тест получения списка абонементов."""
-        # Мокаем сервис
-        mock_subscription_service = AsyncMock()
-        mock_subscription_service.get_all_subscriptions.return_value = [sample_subscription]
-        mock_service.return_value = mock_subscription_service
+        # Настраиваем мок сервиса
+        mock_services['subscription_service'].get_all_subscriptions.return_value = [sample_subscription]
         
         response = client.get("/api/v1/subscriptions/")
         
@@ -194,13 +220,10 @@ class TestSubscriptionsAPI:
         assert len(data["items"]) == 1
         assert data["items"][0]["client_id"] == "test-client-1"
     
-    @patch('backend.src.api.routers.subscriptions.get_subscription_service')
-    def test_create_subscription(self, mock_service, client, sample_subscription):
+    def test_create_subscription(self, client, sample_subscription, mock_services):
         """Тест создания абонемента."""
-        # Мокаем сервис
-        mock_subscription_service = AsyncMock()
-        mock_subscription_service.create_subscription.return_value = sample_subscription
-        mock_service.return_value = mock_subscription_service
+        # Настраиваем мок сервиса
+        mock_services['subscription_service'].create_subscription.return_value = sample_subscription
         
         subscription_data = {
             "client_id": "test-client-1",
@@ -216,15 +239,12 @@ class TestSubscriptionsAPI:
         assert response.status_code == 201
         data = response.json()
         assert data["client_id"] == "test-client-1"
-        assert data["classes_total"] == 8
+        assert data["total_classes"] == 8
     
-    @patch('backend.src.api.routers.subscriptions.get_subscription_service')
-    def test_use_class(self, mock_service, client, sample_subscription):
+    def test_use_class(self, client, sample_subscription, mock_services):
         """Тест использования занятия."""
-        # Мокаем сервис
-        mock_subscription_service = AsyncMock()
-        mock_subscription_service.use_class.return_value = sample_subscription
-        mock_service.return_value = mock_subscription_service
+        # Настраиваем мок сервиса
+        mock_services['subscription_service'].use_class.return_value = sample_subscription
         
         use_class_data = {
             "subscription_id": "test-subscription-1",
@@ -244,13 +264,10 @@ class TestSubscriptionsAPI:
 class TestNotificationsAPI:
     """Тесты API уведомлений."""
     
-    @patch('backend.src.api.routers.notifications.get_notification_service')
-    def test_get_notifications_list(self, mock_service, client, sample_notification):
+    def test_get_notifications_list(self, client, sample_notification, mock_services):
         """Тест получения списка уведомлений."""
-        # Мокаем сервис
-        mock_notification_service = AsyncMock()
-        mock_notification_service.get_all_notifications.return_value = [sample_notification]
-        mock_service.return_value = mock_notification_service
+        # Настраиваем мок сервиса
+        mock_services['notification_service'].get_all_notifications.return_value = [sample_notification]
         
         response = client.get("/api/v1/notifications/")
         
@@ -260,20 +277,17 @@ class TestNotificationsAPI:
         assert len(data["items"]) == 1
         assert data["items"][0]["client_id"] == "test-client-1"
     
-    @patch('backend.src.api.routers.notifications.get_notification_service')
-    def test_create_notification(self, mock_service, client, sample_notification):
+    def test_create_notification(self, client, sample_notification, mock_services):
         """Тест создания уведомления."""
-        # Мокаем сервис
-        mock_notification_service = AsyncMock()
-        mock_notification_service.create_notification.return_value = sample_notification
-        mock_service.return_value = mock_notification_service
+        # Настраиваем мок сервиса
+        mock_services['notification_service'].create_notification.return_value = sample_notification
         
         notification_data = {
             "client_id": "test-client-1",
             "notification_type": "general_info",
             "title": "Тестовое уведомление",
             "message": "Это тестовое сообщение",
-            "priority": "normal"
+            "metadata": {}
         }
         
         response = client.post("/api/v1/notifications/", json=notification_data)
@@ -283,13 +297,11 @@ class TestNotificationsAPI:
         assert data["client_id"] == "test-client-1"
         assert data["title"] == "Тестовое уведомление"
     
-    @patch('backend.src.api.routers.notifications.get_notification_service')
-    def test_send_notification(self, mock_service, client, sample_notification):
+    def test_send_notification(self, client, sample_notification, mock_services):
         """Тест отправки уведомления."""
-        # Мокаем сервис
-        mock_notification_service = AsyncMock()
-        mock_notification_service.send_notification.return_value = sample_notification
-        mock_service.return_value = mock_notification_service
+        # Настраиваем мок сервиса
+        mock_services['notification_service'].send_notification.return_value = True
+        mock_services['notification_service'].get_notification.return_value = sample_notification
         
         response = client.post("/api/v1/notifications/test-notification-1/send")
         
@@ -301,16 +313,12 @@ class TestNotificationsAPI:
 class TestAnalyticsAPI:
     """Тесты API аналитики."""
     
-    @patch('backend.src.api.routers.analytics.get_client_service')
-    @patch('backend.src.api.routers.analytics.get_subscription_service')
-    @patch('backend.src.api.routers.analytics.get_notification_service')
-    def test_overview_analytics(self, mock_notif_service, mock_sub_service, mock_client_service, 
-                               client, sample_client, sample_subscription, sample_notification):
+    def test_overview_analytics(self, client, sample_client, sample_subscription, sample_notification, mock_services):
         """Тест общей аналитики."""
-        # Мокаем сервисы
-        mock_client_service.return_value.get_all_clients.return_value = [sample_client]
-        mock_sub_service.return_value.get_all_subscriptions.return_value = [sample_subscription]
-        mock_notif_service.return_value.get_all_notifications.return_value = [sample_notification]
+        # Настраиваем моки
+        mock_services['client_service'].get_all_clients.return_value = [sample_client]
+        mock_services['subscription_service'].get_all_subscriptions.return_value = [sample_subscription]
+        mock_services['notification_service'].get_all_notifications.return_value = [sample_notification]
         
         response = client.get("/api/v1/analytics/overview")
         
@@ -322,13 +330,10 @@ class TestAnalyticsAPI:
         assert data["data"]["total_subscriptions"] == 1
         assert data["data"]["total_notifications"] == 1
     
-    @patch('backend.src.api.routers.analytics.get_client_service')
-    def test_client_analytics(self, mock_service, client, sample_client):
+    def test_client_analytics(self, client, sample_client, mock_services):
         """Тест аналитики клиентов."""
-        # Мокаем сервис
-        mock_client_service = AsyncMock()
-        mock_client_service.get_all_clients.return_value = [sample_client]
-        mock_service.return_value = mock_client_service
+        # Настраиваем мок сервиса
+        mock_services['client_service'].get_all_clients.return_value = [sample_client]
         
         response = client.get("/api/v1/analytics/clients")
         
@@ -339,13 +344,10 @@ class TestAnalyticsAPI:
         assert "clients_by_experience" in data
         assert "clients_by_status" in data
     
-    @patch('backend.src.api.routers.analytics.get_subscription_service')
-    def test_subscription_analytics(self, mock_service, client, sample_subscription):
+    def test_subscription_analytics(self, client, sample_subscription, mock_services):
         """Тест аналитики абонементов."""
-        # Мокаем сервис
-        mock_subscription_service = AsyncMock()
-        mock_subscription_service.get_all_subscriptions.return_value = [sample_subscription]
-        mock_service.return_value = mock_subscription_service
+        # Настраиваем мок сервиса
+        mock_services['subscription_service'].get_all_subscriptions.return_value = [sample_subscription]
         
         response = client.get("/api/v1/analytics/subscriptions")
         

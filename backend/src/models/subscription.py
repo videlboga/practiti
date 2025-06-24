@@ -66,20 +66,20 @@ class Subscription(BaseModel):
     @computed_field  
     @property
     def is_active(self) -> bool:
-        """Проверка активности абонемента."""
+        """Абонемент считается активным, если его статус ACTIVE, дата окончания в будущем и остались занятия."""
         today = date.today()
         return (
-            self.status == SubscriptionStatus.ACTIVE and
-            self.start_date <= today <= self.end_date and
-            self.remaining_classes > 0 and
-            self.payment_confirmed
+            self.status == SubscriptionStatus.ACTIVE
+            and (self.end_date is None or self.end_date >= today)
+            and (self.remaining_classes is None or self.remaining_classes > 0)
         )
     
     @computed_field
-    @property 
+    @property
     def is_expired(self) -> bool:
-        """Проверка истечения абонемента."""
-        return date.today() > self.end_date
+        """Истёк ли абонемент (по дате окончания или статусу EXPIRED)."""
+        today = date.today()
+        return self.status == SubscriptionStatus.EXPIRED or (self.end_date < today)
     
     @computed_field
     @property
@@ -107,8 +107,8 @@ class Subscription(BaseModel):
         """Валидация даты окончания."""
         if hasattr(info, 'data') and 'start_date' in info.data:
             start_date = info.data['start_date']
-            if v <= start_date:
-                raise ValueError('Дата окончания должна быть позже даты начала')
+            if v < start_date:
+                raise ValueError('Дата окончания должна быть не раньше даты начала')
         
         return v
 
@@ -130,19 +130,15 @@ class SubscriptionCreateData(BaseModel):
     
     client_id: str = Field(..., description="ID клиента-владельца")
     type: SubscriptionType = Field(..., description="Тип абонемента")
-    start_date: Optional[date] = Field(default=None, description="Дата начала (по умолчанию сегодня)")
+    # По умолчанию сегодняшняя дата; поле обязательно (без Optional), чтобы избежать None
+    start_date: date = Field(default_factory=date.today, description="Дата начала абонемента")
     
+    # Валидатор: дата не может быть в прошлом
     @field_validator('start_date')
     @classmethod
-    def validate_start_date(cls, v: Optional[date]) -> date:
-        """Установка даты начала по умолчанию."""
-        if v is None:
-            return date.today()
-        
-        # Нельзя создать абонемент в прошлом
+    def validate_start_date(cls, v: date) -> date:
         if v < date.today():
             raise ValueError('Дата начала не может быть в прошлом')
-        
         return v
 
 
@@ -157,6 +153,7 @@ class SubscriptionUpdateData(BaseModel):
     used_classes: Optional[int] = Field(default=None, ge=0, description="Использованные занятия")
     payment_confirmed: Optional[bool] = Field(default=None, description="Подтверждена ли оплата")
     end_date: Optional[date] = Field(default=None, description="Дата окончания действия")
+    remaining_classes: Optional[int] = Field(default=None, ge=0, description="Оставшиеся занятия")
     
     @field_validator('used_classes')
     @classmethod
@@ -164,4 +161,11 @@ class SubscriptionUpdateData(BaseModel):
         """Валидация использованных занятий."""
         if v is not None and v < 0:
             raise ValueError('Использованные занятия не могут быть отрицательными')
+        return v 
+
+    @field_validator('remaining_classes')
+    @classmethod
+    def validate_remaining_classes(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 0:
+            raise ValueError('Оставшиеся занятия не могут быть отрицательными')
         return v 

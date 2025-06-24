@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     model_config = ConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
     
     # Общие настройки
@@ -76,8 +77,8 @@ class Settings(BaseSettings):
     telegram_webhook_port: int = 8080
     
     # Google Sheets
-    google_sheets_id: str = "fake_sheet_id_for_tests"
-    google_credentials_path: str = "credentials.json"
+    google_sheets_id: str = "10L5aJvWaWN_jrAZpe0Po2cHWMmklF27gTMOca9svRi4"
+    google_credentials_path: str = "backend/config/google_credentials.json"
     
     # API
     api_host: str = "localhost"
@@ -89,7 +90,7 @@ class Settings(BaseSettings):
     
     # Тестовые поля
     secret_key: str = "default_secret_key"
-    environment: str = "production"
+    environment: str = "testing"
     
     def get_telegram_config(self) -> TelegramConfig:
         """Получить конфигурацию Telegram Bot."""

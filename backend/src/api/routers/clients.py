@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import logging
 import math
+import sys
 
 from ..models import (
     ClientCreateRequest, ClientUpdateRequest, ClientResponse, ClientSearchRequest,
@@ -31,13 +32,16 @@ router = APIRouter()
 # Функции для DI
 def _create_repository():
     """Создаёт конкретный репозиторий в зависимости от окружения."""
-    if settings.environment == "testing":
+    # Во время тестов всегда используем in-memory, чтобы изоляция была полной
+    if "pytest" in sys.modules:
         from ...repositories.in_memory_client_repository import InMemoryClientRepository
         return InMemoryClientRepository()
-    else:
-        from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
-        from ...integrations.google_sheets import GoogleSheetsClient
-        return GoogleSheetsClientRepository(GoogleSheetsClient())
+
+    # Во всех средах, кроме pytest, работаем с Google Sheets, чтобы данные были постоянными.
+    from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
+    from ...integrations.google_sheets import GoogleSheetsClient
+
+    return GoogleSheetsClientRepository(GoogleSheetsClient())
 
 
 def _build_client_service() -> ClientServiceProtocol:
@@ -54,15 +58,15 @@ def _get_cached_client_service() -> ClientServiceProtocol:
 async def get_client_service() -> ClientServiceProtocol:
     """Dependency-provider для FastAPI.
 
-    В production-режиме используем кэш (singleton-сервис) для производительности.
-    В testing-режиме кэш отключаем, чтобы каждый тест получал "свежий" инстанс
-    и не возникало побочных эффектов из-за общего состояния между тестами.
+    В production используем singleton для производительности.
+    В development / testing возвращаем новый экземпляр – тесты изолированы.
     """
 
-    if settings.environment == "testing":  # без кэша – изолированные тесты
+    # Во время pytest создаём отдельный экземпляр
+    if "pytest" in sys.modules:
         return _build_client_service()
 
-    # для остальных окружений отдаём singleton
+    # Во всех остальных случаях используем singleton, чтобы не пересоздавать
     return _get_cached_client_service()
 
 

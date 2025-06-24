@@ -19,6 +19,8 @@ from .services.subscription_service import SubscriptionService
 from .services.notification_service import NotificationService
 from .services.scheduler_service import SchedulerService
 from .services.telegram_sender_service import TelegramSenderService
+from .services.post_class_service import PostClassService
+from .services.feedback_service import FeedbackService
 
 # Настройка логирования
 logging.basicConfig(
@@ -51,6 +53,8 @@ class PrakritiApplication:
         self.notification_service: Optional[NotificationService] = None
         self.scheduler_service: Optional[SchedulerService] = None
         self.telegram_sender: Optional[TelegramSenderService] = None
+        self.post_class_service: Optional[PostClassService] = None
+        self.feedback_service: Optional[FeedbackService] = None
         self.is_running = False
         
         logger.info("PrakritiApplication инициализировано")
@@ -88,6 +92,16 @@ class PrakritiApplication:
                 self.client_service, 
                 self.subscription_service,
                 self.telegram_sender
+            )
+            
+            logger.info("Инициализация FeedbackService...")
+            self.feedback_service = FeedbackService(self.notification_service)
+            
+            logger.info("Инициализация PostClassService...")
+            self.post_class_service = PostClassService(
+                self.client_service,
+                self.subscription_service,
+                self.notification_service
             )
             
             logger.info("Инициализация SchedulerService...")

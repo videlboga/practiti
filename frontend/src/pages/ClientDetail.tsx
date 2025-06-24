@@ -10,6 +10,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Button from '@mui/material/Button';
+import BookingForm from '../components/booking/BookingForm';
 
 const ClientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ const ClientDetail: React.FC = () => {
   const [addSubOpen, setAddSubOpen] = React.useState(false);
   const [snackbar, setSnackbar] = React.useState<{ open: boolean; message: string }>({ open: false, message: '' });
   const [deleteSubId, setDeleteSubId] = React.useState<string | null>(null);
+  const [addBookingOpen, setAddBookingOpen] = React.useState(false);
 
   const handleGiftClass = async (subId: string) => {
     try {
@@ -77,6 +79,7 @@ const ClientDetail: React.FC = () => {
         onGiftClassSubscription={handleGiftClass}
         onConfirmPayment={handleConfirmPayment}
         onDeleteSubscription={setDeleteSubId}
+        onAddBooking={() => setAddBookingOpen(true)}
       />
       <Dialog open={!!editSub} onClose={() => setEditSub(null)} maxWidth="xs" fullWidth>
         {editSub && (
@@ -115,6 +118,15 @@ const ClientDetail: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
+      <BookingForm
+        open={addBookingOpen}
+        onClose={() => setAddBookingOpen(false)}
+        clientId={client.id}
+        subscriptions={subscriptions}
+        onCreated={() => {
+          refetchBookings();
+        }}
+      />
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}

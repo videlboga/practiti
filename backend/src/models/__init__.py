@@ -26,6 +26,15 @@ from .booking import (
     BookingStatus
 )
 
+from .feedback import (
+    Feedback,
+    FeedbackCreateData,
+    FeedbackUpdateData,
+    FeedbackType,
+    FeedbackStatus,
+    FeedbackSummary
+)
+
 __all__ = [
     # Client models
     "Client",
@@ -45,4 +54,12 @@ __all__ = [
     "BookingCreateData",
     "BookingUpdateData",
     "BookingStatus",
+    
+    # Feedback models
+    "Feedback",
+    "FeedbackCreateData",
+    "FeedbackUpdateData",
+    "FeedbackType",
+    "FeedbackStatus",
+    "FeedbackSummary",
 ] 

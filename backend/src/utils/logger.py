@@ -256,5 +256,11 @@ def log_subscription_event(
     )
 
 
+def log_subscription_action(subscription_id: str, action: str, details: str = ""):
+    """Логирование действий с абонементами."""
+    logger = get_logger("subscription_flow")
+    logger.info(f"ACTION: {action} | SUB_ID: {subscription_id} | DETAILS: {details}")
+
+
 # Инициализация логирования при импорте модуля
 configure_logging() 

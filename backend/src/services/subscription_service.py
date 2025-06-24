@@ -14,6 +14,7 @@ from ..models.subscription import (
 from ..repositories.protocols.subscription_repository import SubscriptionRepositoryProtocol
 from ..services.protocols.subscription_service import SubscriptionServiceProtocol
 from ..utils.exceptions import BusinessLogicError
+from ..utils.exceptions import ValidationError
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -162,14 +163,26 @@ class SubscriptionService(SubscriptionServiceProtocol):
                 f"Абонемент {subscription_id} неактивен (статус: {subscription.status.value})"
             )
         
-        if subscription.remaining_classes <= 0:
+        remaining = subscription.remaining_classes
+        if remaining is None:
+            remaining = subscription.total_classes - subscription.used_classes
+        if remaining <= 0:
             raise BusinessLogicError(
                 f"На абонементе {subscription_id} закончились занятия"
             )
         
         # Списываем занятие
         new_used_classes = subscription.used_classes + 1
-        update_data = SubscriptionUpdateData(used_classes=new_used_classes)
+        remaining_after = subscription.remaining_classes - 1 if subscription.remaining_classes is not None else None
+        update_data = SubscriptionUpdateData(
+            used_classes=new_used_classes,
+        )
+        # Если можем вычислить оставшиеся, передадим в обновление (для репозитория, который хранит это поле)
+        if remaining_after is not None:
+            update_data_dict = update_data.model_dump(exclude_unset=True)
+            update_data_dict["used_classes"] = new_used_classes
+            update_data_dict["remaining_classes"] = remaining_after
+            update_data = SubscriptionUpdateData(**update_data_dict)
         
         # Проверяем, не исчерпался ли абонемент
         if subscription.type != SubscriptionType.UNLIMITED and new_used_classes >= subscription.total_classes:
@@ -490,4 +503,92 @@ class SubscriptionService(SubscriptionServiceProtocol):
             SubscriptionType.PACKAGE_12: "Абонемент на 12 занятий (30 дней)",
             SubscriptionType.UNLIMITED: "Безлимитный абонемент (30 дней)",
         }
-        return descriptions[subscription_type] 
+        return descriptions[subscription_type]
+
+    # ------------------------------------------------------------------
+    #  Отмена абонемента
+    # ------------------------------------------------------------------
+
+    async def cancel_subscription(self, subscription_id: str, reason: Optional[str] = None) -> Subscription:
+        """Отменить (аннулировать) абонемент, выставив статус CANCELLED.
+
+        Args:
+            subscription_id: ID абонемента
+            reason: Необязательная причина отмены (только логируется)
+        """
+        subscription = await self.get_subscription(subscription_id)
+
+        if subscription.status == SubscriptionStatus.CANCELLED:
+            logger.warning(f"Абонемент {subscription_id} уже отменён")
+            return subscription
+
+        update_data = SubscriptionUpdateData(
+            status=SubscriptionStatus.CANCELLED,
+            end_date=date.today(),
+        )
+
+        updated_subscription = await self._repository.update_subscription(subscription_id, update_data)
+
+        if not updated_subscription:
+            raise BusinessLogicError(f"Не удалось отменить абонемент {subscription_id}")
+
+        log_msg = f"Абонемент {subscription_id} отменён"
+        if reason:
+            log_msg += f". Причина: {reason}"
+        logger.info(log_msg)
+
+        return updated_subscription
+
+    # ------------------------------------------------------------------
+    # Заморозка (freeze)
+    # ------------------------------------------------------------------
+
+    async def freeze_subscription(self, subscription_id: str, days: int, reason: str | None = None) -> Subscription:
+        """Заморозить абонемент, продлив дату окончания на *days*.
+
+        Логика:
+        • Проверяем, что абонемент активен или ожидает оплаты.
+        • Переводим статус в SUSPENDED.
+        • Дату окончания смещаем на указанное количество дней (с учётом уже
+          возможных прошлых заморозок).
+        • Причина пока только логируется; отдельного поля в модели нет.
+        """
+
+        if days <= 0:
+            raise BusinessLogicError("Количество дней заморозки должно быть > 0")
+
+        subscription = await self.get_subscription(subscription_id)
+
+        if subscription.status == SubscriptionStatus.SUSPENDED:
+            # Уже заморожен – просто продлеваем срок ещё на *days*
+            logger.info(
+                "Абонемент %s уже заморожен, продлеваем дату окончания на %s дн.",
+                subscription_id,
+                days,
+            )
+        elif subscription.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.PENDING):
+            raise BusinessLogicError(
+                f"Нельзя заморозить абонемент со статусом {subscription.status.value}"
+            )
+
+        new_end_date = subscription.end_date + timedelta(days=days)
+
+        update_data = SubscriptionUpdateData(
+            status=SubscriptionStatus.SUSPENDED,
+            end_date=new_end_date,
+        )
+
+        updated_subscription = await self._repository.update_subscription(subscription_id, update_data)
+
+        if not updated_subscription:
+            raise BusinessLogicError(f"Не удалось заморозить абонемент {subscription_id}")
+
+        logger.info(
+            "Абонемент %s заморожен на %s дн. Новая дата окончания %s. Причина: %s",
+            subscription_id,
+            days,
+            new_end_date,
+            reason or "не указана",
+        )
+
+        return updated_subscription 

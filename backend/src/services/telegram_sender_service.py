@@ -33,13 +33,12 @@ class TelegramSenderService:
         self._bot: Optional[Bot] = None
         self._is_enabled = False
         
-        # 🚧 Окружение testing — отключаем реальные запросы к Telegram вне зависимости от токена
-        if settings.environment == "testing":
-            logger.info("TelegramSenderService запущен в тестовом окружении — отправка сообщений отключена")
-            # _is_enabled остаётся False, выходим раньше
+        # Разрешаем реальные запросы ТОЛЬКО в production.
+        if settings.environment != "production":
+            logger.info("TelegramSenderService запущен в непроизводственном окружении — отправка сообщений отключена")
             return
 
-        # Инициализируем бота, если указан валидный токен (production/dev)
+        # Production: инициализируем бота, если указан валидный токен
         telegram_config = settings.get_telegram_config()
         if telegram_config.bot_token and telegram_config.bot_token != "fake_token_for_tests":
             try:

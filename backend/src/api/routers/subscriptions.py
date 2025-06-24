@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import logging
 import math
+import sys
 from datetime import date
 
 from ..models import (
@@ -20,6 +21,7 @@ from ...models.subscription import SubscriptionStatus, SubscriptionType
 from ...utils.exceptions import BusinessLogicError, ValidationError
 from ...config.settings import settings
 from ...services.subscription_service import SubscriptionService
+from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +32,25 @@ router = APIRouter()
 
 
 def _create_subscription_repository():
-    """Создать репозиторий в зависимости от окружения."""
-    if settings.environment == "testing":
+    """Фабрика репозитория абонементов в зависимости от окружения."""
+
+    global _subscription_repo  # type: ignore[attr-defined]
+
+    try:
+        return _subscription_repo  # type: ignore[misc]
+    except NameError:
+        pass  # создаём ниже
+
+    # Во время тестов используем In-Memory, во всех остальных – Google Sheets
+    if "pytest" in sys.modules:
         from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
-        return InMemorySubscriptionRepository()
+        _subscription_repo = InMemorySubscriptionRepository()  # type: ignore
     else:
         from ...repositories.google_sheets_subscription_repository import GoogleSheetsSubscriptionRepository
         from ...integrations.google_sheets import GoogleSheetsClient
-        return GoogleSheetsSubscriptionRepository(GoogleSheetsClient())
+        _subscription_repo = GoogleSheetsSubscriptionRepository(GoogleSheetsClient())  # type: ignore
+
+    return _subscription_repo  # type: ignore
 
 
 def _build_subscription_service() -> SubscriptionServiceProtocol:

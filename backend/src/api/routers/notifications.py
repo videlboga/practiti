@@ -33,17 +33,24 @@ async def get_notification_service() -> NotificationServiceProtocol:
     from ...services.notification_service import NotificationService
     from ...services.client_service import ClientService
     from ...services.subscription_service import SubscriptionService
+    from ...services.telegram_sender_service import TelegramSenderService
+    from ...config.settings import settings
     
-    # Создаем репозитории
-    notification_repository = InMemoryNotificationRepository()
-    client_repository = InMemoryClientRepository()
-    subscription_repository = InMemorySubscriptionRepository()
+    if settings.environment == "testing":
+        notification_repository = InMemoryNotificationRepository()
+    else:
+        from ...repositories.google_sheets_notification_repository import GoogleSheetsNotificationRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        notification_repository = GoogleSheetsNotificationRepository(GoogleSheetsClient())
     
-    # Создаем сервисы
-    client_service = ClientService(client_repository)
-    subscription_service = SubscriptionService(subscription_repository)
+    # Создаем сервисы (используем такие же фабрики, как в других роутерах)
+    from ...api.routers.clients import _build_client_service as _cs
+    from ...api.routers.subscriptions import _build_subscription_service as _ss
+
+    client_service = _cs()
+    subscription_service = _ss()
     
-    return NotificationService(notification_repository, client_service, subscription_service)
+    return NotificationService(notification_repository, client_service, subscription_service, TelegramSenderService())
 
 
 @router.get("/", response_model=PaginatedResponse)
@@ -69,7 +76,7 @@ async def get_notifications(
         if status:
             notifications = [n for n in notifications if n.status == status]
         if notification_type:
-            notifications = [n for n in notifications if n.notification_type == notification_type]
+            notifications = [n for n in notifications if n.type == notification_type]
         if priority:
             notifications = [n for n in notifications if n.priority == priority]
         
@@ -81,7 +88,7 @@ async def get_notifications(
         
         # Конвертируем в response модели
         notification_responses = [
-            NotificationResponse.from_orm(notification) for notification in paginated_notifications
+            NotificationResponse.from_notification(notification) for notification in paginated_notifications
         ]
         
         return PaginatedResponse(
@@ -110,7 +117,7 @@ async def get_notification(
         if not notification:
             raise HTTPException(status_code=404, detail="Уведомление не найдено")
         
-        return NotificationResponse.from_orm(notification)
+        return NotificationResponse.from_notification(notification)
         
     except BusinessLogicError as e:
         logger.warning(f"Уведомление не найдено: {notification_id}")
@@ -134,7 +141,7 @@ async def create_notification(
         
         create_data = NotificationCreateData(
             client_id=request.client_id,
-            notification_type=request.notification_type,
+            type=request.notification_type,  # Преобразуем notification_type -> type
             title=request.title,
             message=request.message,
             priority=request.priority,
@@ -145,7 +152,7 @@ async def create_notification(
         notification = await notification_service.create_notification(create_data)
         
         logger.info(f"Уведомление создано: {notification.id}")
-        return NotificationResponse.from_orm(notification)
+        return NotificationResponse.from_notification(notification)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка бизнес-логики при создании уведомления: {e}")
@@ -167,10 +174,16 @@ async def send_notification(
     try:
         logger.info(f"Отправка уведомления: {notification_id}")
         
-        notification = await notification_service.send_notification(notification_id)
+        # Отправляем уведомление (возвращает bool)
+        success = await notification_service.send_notification(notification_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Не удалось отправить уведомление")
+        
+        # Получаем обновленное уведомление
+        notification = await notification_service.get_notification(notification_id)
         
         logger.info(f"Уведомление отправлено: {notification_id}")
-        return NotificationResponse.from_orm(notification)
+        return NotificationResponse.from_notification(notification)
         
     except BusinessLogicError as e:
         logger.warning(f"Ошибка при отправке уведомления: {e}")

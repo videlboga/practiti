@@ -31,7 +31,7 @@ class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()), description="Уникальный ID клиента")
     name: str = Field(..., min_length=2, max_length=100, description="Имя клиента")
     phone: str = Field(..., description="Номер телефона в формате +7XXXXXXXXXX")
-    telegram_id: int = Field(..., description="Telegram ID пользователя")
+    telegram_id: Optional[int] = Field(default=None, description="Telegram ID пользователя")
     yoga_experience: bool = Field(..., description="Есть ли опыт занятий йогой")
     intensity_preference: str = Field(..., description="Предпочтения по интенсивности")
     time_preference: str = Field(..., description="Предпочтения по времени занятий")
@@ -86,19 +86,31 @@ class Client(BaseModel):
     @classmethod
     def validate_intensity(cls, v: str) -> str:
         """Валидация предпочтений по интенсивности."""
-        allowed_values = ['низкая', 'средняя', 'высокая', 'любая']
-        if v.lower() not in allowed_values:
-            raise ValueError(f'Интенсивность должна быть одной из: {", ".join(allowed_values)}')
-        return v.lower()
+        mapping = {
+            'низкая': 'низкая',
+            'средняя': 'средняя',
+            'высокая': 'высокая',
+            'любая': 'любая'
+        }
+        key = v.lower()
+        if key not in mapping:
+            raise ValueError('Интенсивность должна быть одной из: низкая/средняя/высокая/любая')
+        return mapping[key]
     
     @field_validator('time_preference')
     @classmethod
     def validate_time_preference(cls, v: str) -> str:
         """Валидация предпочтений по времени."""
-        allowed_values = ['утро', 'день', 'вечер', 'любое']
-        if v.lower() not in allowed_values:
-            raise ValueError(f'Время должно быть одним из: {", ".join(allowed_values)}')
-        return v.lower()
+        mapping = {
+            'утро': 'утро',
+            'день': 'день',
+            'вечер': 'вечер',
+            'любое': 'любое'
+        }
+        key = v.lower()
+        if key not in mapping:
+            raise ValueError('Время должно быть одним из: утро/день/вечер/любое')
+        return mapping[key]
 
     def __str__(self) -> str:
         """Строковое представление клиента."""
@@ -118,7 +130,7 @@ class ClientCreateData(BaseModel):
     
     name: str = Field(..., min_length=2, max_length=100, description="Имя клиента")
     phone: str = Field(..., description="Номер телефона")
-    telegram_id: int = Field(..., description="Telegram ID пользователя")
+    telegram_id: Optional[int] = Field(default=None, description="Telegram ID пользователя")
     yoga_experience: bool = Field(..., description="Есть ли опыт занятий йогой")
     intensity_preference: str = Field(..., description="Предпочтения по интенсивности")
     time_preference: str = Field(..., description="Предпочтения по времени занятий")

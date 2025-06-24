@@ -42,6 +42,13 @@ class NotificationPriority(str, Enum):
     URGENT = "urgent"     # Срочное уведомление
 
 
+class NotificationChannel(str, Enum):
+    """Канал отправки уведомления."""
+    TELEGRAM = "telegram"
+    EMAIL = "email"
+    SMS = "sms"
+
+
 class Notification(BaseModel):
     """
     Основная модель уведомления.
@@ -59,9 +66,11 @@ class Notification(BaseModel):
     
     # Временные метки
     created_at: datetime = Field(default_factory=datetime.now, description="Дата создания")
+    updated_at: datetime = Field(default_factory=datetime.now, description="Дата обновления")
     scheduled_at: Optional[datetime] = Field(default=None, description="Запланированное время отправки")
     sent_at: Optional[datetime] = Field(default=None, description="Время отправки")
     delivered_at: Optional[datetime] = Field(default=None, description="Время доставки")
+    failed_at: Optional[datetime] = Field(default=None, description="Время ошибки отправки")
     
     # Дополнительные данные
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные данные")
@@ -70,6 +79,9 @@ class Notification(BaseModel):
     # Настройки повтора
     retry_count: int = Field(default=0, ge=0, description="Количество попыток отправки")
     max_retries: int = Field(default=3, ge=0, description="Максимальное количество попыток")
+    
+    # Канал отправки
+    channel: NotificationChannel = Field(default=NotificationChannel.TELEGRAM, description="Канал отправки уведомления")
     
     def __str__(self) -> str:
         """Строковое представление уведомления."""
@@ -92,6 +104,7 @@ class NotificationCreateData(BaseModel):
     priority: NotificationPriority = Field(default=NotificationPriority.NORMAL, description="Приоритет")
     scheduled_at: Optional[datetime] = Field(default=None, description="Запланированное время отправки")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Дополнительные данные")
+    channel: NotificationChannel = Field(default=NotificationChannel.TELEGRAM, description="Канал отправки уведомления")
 
 
 class NotificationUpdateData(BaseModel):
@@ -102,8 +115,11 @@ class NotificationUpdateData(BaseModel):
     status: Optional[NotificationStatus] = Field(default=None, description="Статус уведомления")
     sent_at: Optional[datetime] = Field(default=None, description="Время отправки")
     delivered_at: Optional[datetime] = Field(default=None, description="Время доставки")
+    failed_at: Optional[datetime] = Field(default=None, description="Время ошибки отправки")
     telegram_message_id: Optional[int] = Field(default=None, description="ID сообщения в Telegram")
     retry_count: Optional[int] = Field(default=None, ge=0, description="Количество попыток отправки")
+    updated_at: Optional[datetime] = Field(default_factory=datetime.now, description="Время обновления")
+    channel: Optional[NotificationChannel] = Field(default=None, description="Канал отправки уведомления")
 
 
 class NotificationTemplate(BaseModel):
@@ -183,6 +199,13 @@ NOTIFICATION_TEMPLATES = {
         title_template="🎫 Абонемент приобретен",
         message_template="Поздравляем, {client_name}! 🎉\n\nВы успешно приобрели абонемент «{subscription_type}».\n\n📋 Детали:\n• Занятий: {total_classes}\n• Действует до: {end_date}\n• Стоимость: {price}₽\n\nУвидимся на занятиях! 🧘‍♀️",
         priority=NotificationPriority.NORMAL
+    ),
+    
+    NotificationType.CLASS_REMINDER: NotificationTemplate(
+        type=NotificationType.CLASS_REMINDER,
+        title_template="⏰ Напоминание о занятии",
+        message_template="Привет, {client_name}! 👋\n\nНапоминаем о занятии «{class_type}» {class_date}.\n\n📍 Увидимся в зале! Не забудьте коврик 🧘‍♀️",
+        priority=NotificationPriority.HIGH
     ),
     
     NotificationType.GENERAL_INFO: NotificationTemplate(

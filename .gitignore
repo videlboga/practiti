@@ -104,4 +104,5 @@ secrets.json
 
 # Google Sheets credentials
 credentials.json
-token.json 
+token.json
+backend/config/google_credentials.json 

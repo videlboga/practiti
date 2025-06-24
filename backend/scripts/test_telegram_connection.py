@@ -10,6 +10,7 @@ import asyncio
 import logging
 import sys
 import os
+import pytest
 
 # Добавляем src в путь
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -26,6 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_telegram_connection():
     """
     Тестирует подключение к Telegram API.
@@ -67,6 +69,7 @@ async def test_telegram_connection():
         return False
 
 
+@pytest.mark.asyncio
 async def test_send_message():
     """
     Тестирует отправку сообщения администратору.

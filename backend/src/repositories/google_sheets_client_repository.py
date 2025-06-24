@@ -45,6 +45,9 @@ class GoogleSheetsClientRepository(ClientRepositoryProtocol):
     
     async def _ensure_headers(self) -> None:
         """Убедиться, что заголовки таблицы установлены."""
+        # Убеждаемся, что лист существует
+        await self.sheets_client.ensure_sheet_exists(self.SHEET_NAME)
+
         try:
             # Читаем первую строку
             first_row = await self.sheets_client.read_range("A1:M1", self.SHEET_NAME)
@@ -59,12 +62,8 @@ class GoogleSheetsClientRepository(ClientRepositoryProtocol):
                 logger.info("Headers set for Clients sheet")
                 
         except GoogleSheetsError:
-            # Если лист не существует, создаём заголовки
-            await self.sheets_client.write_range(
-                "A1:M1", 
-                [self.HEADER_ROW], 
-                self.SHEET_NAME
-            )
+            # Если лист не существует или другая ошибка – пытаемся записать заголовки
+            await self.sheets_client.write_range("A1:M1", [self.HEADER_ROW], self.SHEET_NAME)
             logger.info("Created Clients sheet with headers")
     
     def _client_to_row(self, client: Client) -> List[str]:
@@ -81,7 +80,7 @@ class GoogleSheetsClientRepository(ClientRepositoryProtocol):
             client.id,
             client.name,
             client.phone,
-            str(client.telegram_id),
+            str(client.telegram_id) if client.telegram_id is not None else "",
             "Да" if client.yoga_experience else "Нет",
             client.intensity_preference,
             client.time_preference,
@@ -111,7 +110,7 @@ class GoogleSheetsClientRepository(ClientRepositoryProtocol):
                 id=row[0],
                 name=row[1],
                 phone=row[2],
-                telegram_id=int(row[3]),
+                telegram_id=int(row[3]) if row[3] else None,
                 yoga_experience=row[4].lower() in ["да", "yes", "true", "1"],
                 intensity_preference=row[5],
                 time_preference=row[6],
@@ -216,6 +215,8 @@ class GoogleSheetsClientRepository(ClientRepositoryProtocol):
     
     async def get_client_by_telegram_id(self, telegram_id: int) -> Optional[Client]:
         """Получить клиента по Telegram ID."""
+        if telegram_id is None:
+            return None
         try:
             # Читаем все данные клиентов
             all_data = await self.sheets_client.read_range("A:M", self.SHEET_NAME)
