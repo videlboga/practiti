@@ -6,7 +6,7 @@ export type SubscriptionType =
   | 'package_12'
   | 'unlimited';
 
-export type SubscriptionStatus = 'pending' | 'active' | 'expired' | 'exhausted' | 'inactive';
+export type SubscriptionStatus = 'pending' | 'active' | 'expired' | 'exhausted' | 'inactive' | 'suspended';
 
 export interface Subscription {
   id: string;

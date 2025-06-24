@@ -4,7 +4,7 @@ import { useClientDetail, useClientSubscriptions, useClientBookings } from '../h
 import ClientDetailCard from '../components/client/ClientDetailCard';
 import SubscriptionForm from '../components/subscription/SubscriptionForm';
 import Dialog from '@mui/material/Dialog';
-import { giftClassToSubscription, deleteSubscription, confirmSubscriptionPayment } from '../services/apiClient';
+import { giftClassToSubscription, deleteSubscription, confirmSubscriptionPayment, freezeSubscription } from '../services/apiClient';
 import Snackbar from '@mui/material/Snackbar';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -58,6 +58,23 @@ const ClientDetail: React.FC = () => {
     }
   };
 
+  const handleFreezeSubscription = async (subId: string) => {
+    const daysStr = prompt('На сколько дней заморозить абонемент? (число дней, 1–90)');
+    if (!daysStr) return;
+    const days = parseInt(daysStr, 10);
+    if (Number.isNaN(days) || days < 1) {
+      setSnackbar({ open: true, message: 'Неверное число дней' });
+      return;
+    }
+    try {
+      await freezeSubscription(subId, days);
+      setSnackbar({ open: true, message: `Абонемент заморожен на ${days} дн.` });
+      refetchSubs();
+    } catch (e: any) {
+      setSnackbar({ open: true, message: e.message || 'Ошибка заморозки' });
+    }
+  };
+
   if (isLoading) return <div>Загрузка...</div>;
   if (error) return <div>Ошибка загрузки: {error.message}</div>;
   if (!client) return <div>Клиент не найден</div>;
@@ -79,6 +96,7 @@ const ClientDetail: React.FC = () => {
         onGiftClassSubscription={handleGiftClass}
         onConfirmPayment={handleConfirmPayment}
         onDeleteSubscription={setDeleteSubId}
+        onFreezeSubscription={handleFreezeSubscription}
         onAddBooking={() => setAddBookingOpen(true)}
       />
       <Dialog open={!!editSub} onClose={() => setEditSub(null)} maxWidth="xs" fullWidth>

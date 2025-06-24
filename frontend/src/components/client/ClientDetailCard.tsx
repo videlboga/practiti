@@ -20,6 +20,7 @@ interface ClientDetailCardProps {
   onEditSubscription?: (sub: import('../../types/subscription').Subscription) => void;
   onGiftClassSubscription?: (id: string) => void;
   onDeleteSubscription?: (id: string) => void;
+  onFreezeSubscription?: (id: string) => void;
   bookings?: import('../../types/booking').Booking[];
   loadingBookings?: boolean;
   errorBookings?: string | null;
@@ -80,6 +81,7 @@ const ClientDetailCard: React.FC<ClientDetailCardProps> = ({
   onEditSubscription,
   onGiftClassSubscription,
   onDeleteSubscription,
+  onFreezeSubscription,
   bookings = [],
   loadingBookings = false,
   errorBookings = null,
@@ -134,6 +136,7 @@ const ClientDetailCard: React.FC<ClientDetailCardProps> = ({
             onEdit={sub => onEditSubscription?.(subscriptions.find(s => s.id === sub)!)}
             onGiftClass={onGiftClassSubscription}
             onDelete={onDeleteSubscription}
+            onFreeze={onFreezeSubscription}
           />
         )}
       </div>

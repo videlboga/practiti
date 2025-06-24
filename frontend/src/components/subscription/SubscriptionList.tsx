@@ -13,6 +13,7 @@ interface SubscriptionListProps {
   onDelete?: (id: string) => void;
   onGiftClass?: (id: string) => void;
   onConfirmPayment?: (id: string) => void;
+  onFreeze?: (id: string) => void;
 }
 
 const typeLabels: Record<string, string> = {
@@ -34,7 +35,7 @@ const statusColors: Record<string, string> = {
 /**
  * Список абонементов клиента с action-кнопками
  */
-const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onEdit, onExtend, onDelete, onGiftClass, onConfirmPayment }) => {
+const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onEdit, onExtend, onDelete, onGiftClass, onConfirmPayment, onFreeze }) => {
   if (!subscriptions.length) {
     return <Typography color="text.secondary">Нет абонементов</Typography>;
   }
@@ -69,6 +70,11 @@ const SubscriptionList: React.FC<SubscriptionListProps> = ({ subscriptions, onEd
               {onExtend && (
                 <Button variant="outlined" size="small" fullWidth onClick={() => onExtend(sub.id)}>
                   Продлить
+                </Button>
+              )}
+              {onFreeze && (
+                <Button variant="outlined" size="small" fullWidth onClick={() => onFreeze(sub.id)}>
+                  Заморозить
                 </Button>
               )}
               {onDelete && (
