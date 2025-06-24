@@ -240,4 +240,14 @@ class SubscriptionServiceProtocol(ABC):
         Returns:
             Обновленный абонемент
         """
+        pass
+    
+    @abstractmethod
+    async def update_subscription(self, subscription_id: str, data: "SubscriptionUpdateData") -> "Subscription":
+        """Частичное обновление абонемента (status, end_date и др.)."""
+        pass
+    
+    @abstractmethod
+    async def gift_class(self, subscription_id: str) -> "Subscription":
+        """Подарить одно занятие клиенту."""
         pass 

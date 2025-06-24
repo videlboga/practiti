@@ -8,6 +8,7 @@
 import asyncio
 import logging
 from typing import Optional
+import sys
 
 from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, ConversationHandler, CallbackQueryHandler, filters
@@ -18,6 +19,7 @@ from ...config.settings import TelegramConfig
 from ...services.protocols.client_service import ClientServiceProtocol
 from ...services.protocols.subscription_service import SubscriptionServiceProtocol
 from .handlers.command_handlers import CommandHandlers
+from .handlers.booking_handlers import BookingHandlers, BOOKING_INPUT
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,21 @@ class PrakritiTelegramBot:
         from .handlers.registration_handlers import RegistrationHandlers
         
         self.registration_service = RegistrationService(client_service)
+        
+        # --- BookingService и обработчики ---
+        from ...services.booking_service import BookingService
+        if "pytest" in sys.modules:
+            from ...repositories.in_memory_booking_repository import InMemoryBookingRepository
+            booking_repo = InMemoryBookingRepository()
+        else:
+            from ...repositories.google_sheets_booking_repository import GoogleSheetsBookingRepository
+            from ...integrations.google_sheets import GoogleSheetsClient
+            booking_repo = GoogleSheetsBookingRepository(GoogleSheetsClient())
+
+        self.booking_service = BookingService(booking_repo, client_service, subscription_service)
+
         self.command_handlers = CommandHandlers(client_service)
+        self.booking_handlers = BookingHandlers(self.booking_service, client_service)
         self.registration_handlers = RegistrationHandlers(self.registration_service)
         
         logger.info("PrakritiTelegramBot инициализирован")
@@ -182,6 +198,20 @@ class PrakritiTelegramBot:
         
         self.application.add_handler(registration_conv_handler)
         
+        # -------- /book ConversationHandler --------
+        booking_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("book", self.booking_handlers.book_command)],
+            states={
+                BOOKING_INPUT: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.booking_handlers.process_booking_input),
+                ],
+            },
+            fallbacks=[
+                CommandHandler("cancel", self.booking_handlers.cancel_booking),
+            ],
+        )
+        self.application.add_handler(booking_conv_handler)
+        
         # Обработчик неизвестных команд (должен быть последним)
         self.application.add_handler(
             MessageHandler(
@@ -207,6 +237,7 @@ class PrakritiTelegramBot:
             BotCommand("faq", "❓ Частые вопросы"),
             BotCommand("prices", "💰 Цены"),
             BotCommand("schedule", "📅 Расписание"),
+            BotCommand("book", "✏️ Записаться на занятие"),
             BotCommand("contact", "📞 Контакты"),
         ]
         

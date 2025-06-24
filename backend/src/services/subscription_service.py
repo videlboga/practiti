@@ -52,14 +52,7 @@ class SubscriptionService(SubscriptionServiceProtocol):
         """
         logger.info(f"Создание абонемента {data.type.value} для клиента {data.client_id}")
         
-        # Проверяем, нет ли активного абонемента у клиента
-        active_subscription = await self.get_active_subscription(data.client_id)
-        if active_subscription:
-            raise BusinessLogicError(
-                f"У клиента уже есть активный абонемент: {active_subscription.type.value}"
-            )
-        
-        # Создаем абонемент через репозиторий
+        # Создаем абонемент через репозиторий (допускаем несколько активных)
         subscription = await self._repository.save_subscription(data)
         
         logger.info(f"Абонемент {subscription.id} создан успешно")
@@ -591,4 +584,61 @@ class SubscriptionService(SubscriptionServiceProtocol):
             reason or "не указана",
         )
 
+        return updated_subscription
+
+    async def update_subscription(self, subscription_id: str, data: SubscriptionUpdateData) -> Subscription:
+        """Частичное обновление абонемента через репозиторий."""
+        # Если указана смена типа – пересчитаем лимиты/цену
+        if data.type is not None:
+            current_sub = await self.get_subscription(subscription_id)
+            new_total = self.get_subscription_classes_count(data.type)
+            data.total_classes = new_total
+            # Обеспечим корректность used_classes
+            if current_sub.used_classes > new_total:
+                data.used_classes = new_total
+
+        updated_subscription = await self._repository.update_subscription(subscription_id, data)  # type: ignore[arg-type]
+        if not updated_subscription:
+            raise BusinessLogicError(f"Абонемент {subscription_id} не найден")
+        return updated_subscription
+
+    # ------------------------------------------------------------------
+    #  Подарить занятие (gift-class)
+    # ------------------------------------------------------------------
+
+    async def gift_class(self, subscription_id: str) -> Subscription:
+        """Добавить клиенту одно бесплатное занятие.
+
+        Логика:
+        • Для обычных типов абонементов уменьшаем used_classes на 1,
+          тем самым увеличивая remaining_classes.
+        • Если used_classes уже 0, увеличиваем total_classes на 1.
+        • Для безлимитного абонемента операция не имеет смысла.
+        """
+        subscription = await self.get_subscription(subscription_id)
+
+        if subscription.type == SubscriptionType.UNLIMITED:
+            raise BusinessLogicError("Безлимитному абонементу не требуется дарить занятия")
+
+        if subscription.used_classes > 0:
+            # Возвращаем одно использованное занятие
+            new_used = subscription.used_classes - 1
+            update_data = SubscriptionUpdateData(used_classes=new_used)
+        else:
+            # Если занятий ещё не использовано – расширяем лимит, увеличив total_classes
+            # (через пересчёт remaining_classes)
+            update_data = SubscriptionUpdateData(
+                remaining_classes=subscription.remaining_classes + 1,
+                total_classes=subscription.total_classes + 1,
+            )
+
+        # Если абонемент был исчерпан, делаем его активным
+        if subscription.status == SubscriptionStatus.EXHAUSTED:
+            update_data.status = SubscriptionStatus.ACTIVE
+
+        updated_subscription = await self._repository.update_subscription(subscription_id, update_data)
+        if not updated_subscription:
+            raise BusinessLogicError(f"Не удалось обновить абонемент {subscription_id}")
+
+        logger.info("Подарено занятие для абонемента %s. Осталось %s", updated_subscription.id, updated_subscription.remaining_classes)
         return updated_subscription 

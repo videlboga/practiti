@@ -132,6 +132,14 @@ class InMemorySubscriptionRepository(SubscriptionRepositoryProtocol):
                 subscription.payment_confirmed_at = datetime.now()
         if data.end_date is not None:
             subscription.end_date = data.end_date
+        if data.remaining_classes is not None:
+            # Изменяем used_classes исходя из оставшихся занятий
+            subscription.used_classes = subscription.total_classes - data.remaining_classes
+        if getattr(data, 'total_classes', None) is not None:  # type: ignore[attr-defined]
+            subscription.total_classes = data.total_classes  # type: ignore[attr-defined]
+        if getattr(data, 'type', None) is not None:  # type: ignore[attr-defined]
+            subscription.type = data.type  # type: ignore[attr-defined]
+            # total_classes пересчитываем только если явно передан или остаётся прежним
         
         logger.info(f"Абонемент {subscription_id} обновлен в памяти")
         return subscription

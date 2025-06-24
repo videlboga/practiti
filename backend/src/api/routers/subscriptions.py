@@ -14,7 +14,7 @@ from datetime import date
 
 from ..models import (
     SubscriptionCreateRequest, SubscriptionResponse, UseClassRequest,
-    APIResponse, PaginationParams, PaginatedResponse
+    SubscriptionUpdateRequest, APIResponse, PaginationParams, PaginatedResponse
 )
 from ...services.protocols.subscription_service import SubscriptionServiceProtocol
 from ...models.subscription import SubscriptionStatus, SubscriptionType
@@ -278,3 +278,66 @@ async def confirm_subscription_payment(
     except Exception as e:
         logger.error(f"Ошибка подтверждения оплаты {subscription_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка подтверждения оплаты")
+
+
+# ---------------------------------------------------------------------------
+#  Обновление абонемента (PUT)
+# ---------------------------------------------------------------------------
+
+
+@router.put("/{subscription_id}", response_model=SubscriptionResponse)
+async def update_subscription(
+    subscription_id: str,
+    request: SubscriptionUpdateRequest,
+    subscription_service: SubscriptionServiceProtocol = Depends(get_subscription_service)
+) -> SubscriptionResponse:
+    """Частичное обновление абонемента (статус, дата окончания)."""
+    try:
+        logger.info("Обновление абонемента %s", subscription_id)
+
+        from ...models.subscription import SubscriptionUpdateData
+
+        update_data = SubscriptionUpdateData(
+            status=request.status,
+            end_date=request.end_date,
+            used_classes=request.used_classes,
+            remaining_classes=request.remaining_classes,
+            type=request.type,
+        )
+        # Смена типа абонемента пока не поддерживается (требует пересчёта полей)
+
+        subscription = await subscription_service.update_subscription(subscription_id, update_data)  # type: ignore[arg-type]
+
+        return SubscriptionResponse.from_orm(subscription)
+
+    except BusinessLogicError as e:
+        logger.warning("Бизнес-ошибка обновления абонемента: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Ошибка обновления абонемента %s: %s", subscription_id, e)
+        raise HTTPException(status_code=500, detail="Ошибка обновления абонемента")
+
+
+# ---------------------------------------------------------------------------
+#  Подарить занятие (gift-class)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{subscription_id}/gift-class", response_model=SubscriptionResponse)
+async def gift_class(
+    subscription_id: str,
+    subscription_service: SubscriptionServiceProtocol = Depends(get_subscription_service)
+) -> SubscriptionResponse:
+    """Подарить клиенту одно дополнительное занятие."""
+    try:
+        logger.info("Подарок занятия для абонемента %s", subscription_id)
+
+        subscription = await subscription_service.gift_class(subscription_id)
+
+        return SubscriptionResponse.from_orm(subscription)
+
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Ошибка gift-class для %s: %s", subscription_id, e)
+        raise HTTPException(status_code=500, detail="Ошибка подарка занятия")

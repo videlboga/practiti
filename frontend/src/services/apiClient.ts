@@ -106,8 +106,12 @@ export const deleteSubscription = async (id: string): Promise<void> => {
   await api.delete(`/api/subscriptions/${id}`);
 };
 
-export const freezeSubscription = async (id: string, days: number): Promise<Subscription> => {
-  const res = await api.patch<Subscription>(`/api/subscriptions/${id}/freeze`, { days });
+export const freezeSubscription = async (id: string, days: number, reason?: string): Promise<Subscription> => {
+  const res = await api.patch<Subscription>(
+    `/api/subscriptions/${id}/freeze`,
+    null,
+    { params: { days, ...(reason ? { reason } : {}) } },
+  );
   return res.data;
 };
 

@@ -153,7 +153,9 @@ class SubscriptionUpdateData(BaseModel):
     used_classes: Optional[int] = Field(default=None, ge=0, description="Использованные занятия")
     payment_confirmed: Optional[bool] = Field(default=None, description="Подтверждена ли оплата")
     end_date: Optional[date] = Field(default=None, description="Дата окончания действия")
-    remaining_classes: Optional[int] = Field(default=None, ge=0, description="Оставшиеся занятия")
+    remaining_classes: Optional[int] = Field(None, ge=0, description="Оставшиеся занятия")
+    total_classes: Optional[int] = Field(None, ge=0, description="Общее количество занятий (для подарков)")
+    type: Optional[SubscriptionType] = Field(None, description="Смена типа абонемента")
     
     @field_validator('used_classes')
     @classmethod

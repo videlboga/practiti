@@ -24,6 +24,10 @@ const ClientDetail: React.FC = () => {
   const [deleteSubId, setDeleteSubId] = React.useState<string | null>(null);
   const [addBookingOpen, setAddBookingOpen] = React.useState(false);
 
+  const visibleSubscriptions = subscriptions.filter(
+    (s) => !['cancelled', 'inactive'].includes(s.status),
+  );
+
   const handleGiftClass = async (subId: string) => {
     try {
       await giftClassToSubscription(subId);
@@ -85,7 +89,7 @@ const ClientDetail: React.FC = () => {
         client={client}
         onEdit={() => navigate(`/clients/${client.id}/edit`)}
         onAddSubscription={() => setAddSubOpen(true)}
-        subscriptions={subscriptions}
+        subscriptions={visibleSubscriptions}
         onDelete={() => {/* TODO: реализовать удаление */}}
         loadingSubscriptions={loadingSubs}
         errorSubscriptions={errorSubs ? errorSubs.message : null}

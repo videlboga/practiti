@@ -84,6 +84,13 @@ class GoogleSheetsSubscriptionRepository(SubscriptionRepositoryProtocol):
             
             details = SUBSCRIPTION_TYPES.get(SubscriptionType(row[2]))
             
+            total_classes = int(row[6]) if row[6] else 0
+            remaining = int(row[7]) if row[7] else 0
+
+            # used = total - remaining, не опираемся на константу classes,
+            # чтобы корректно обрабатывать подарочные занятия и иные изменения
+            used = max(0, total_classes - remaining)
+
             return Subscription(
                 id=row[0],
                 client_id=row[1],
@@ -91,8 +98,8 @@ class GoogleSheetsSubscriptionRepository(SubscriptionRepositoryProtocol):
                 status=SubscriptionStatus(row[3]),
                 start_date=datetime.fromisoformat(row[4]).date() if row[4] else None,
                 end_date=datetime.fromisoformat(row[5]).date() if row[5] else None,
-                total_classes=int(row[6]),
-                used_classes=int(details["classes"]) - int(row[7]) if details else 0,
+                total_classes=total_classes,
+                used_classes=used,
                 price=details["price"] if details else 0,
                 created_at=datetime.fromisoformat(row[8]),
             )
@@ -166,6 +173,9 @@ class GoogleSheetsSubscriptionRepository(SubscriptionRepositoryProtocol):
             update_data: SubscriptionUpdateData или Subscription
         """
 
+        # Гарантируем, что лист и заголовки существуют (может быть новым)
+        await self._ensure_headers()
+
         # Lazy import, чтобы избежать циклических зависимостей
         from ..models.subscription import SubscriptionUpdateData, Subscription
 
@@ -194,6 +204,22 @@ class GoogleSheetsSubscriptionRepository(SubscriptionRepositoryProtocol):
             if update_data.remaining_classes is not None:
                 # Обновляем оставшиеся занятия через пересчёт used_classes
                 subscription.used_classes = subscription.total_classes - update_data.remaining_classes
+            # Смена типа абонемента – пересчитываем total_classes и price
+            if getattr(update_data, "type", None) is not None:  # type: ignore[attr-defined]
+                from ..models.subscription import SubscriptionType as _T
+                new_type = _T(update_data.type)  # type: ignore[arg-type]
+                if subscription.type != new_type:
+                    subscription.type = new_type
+                    details = SUBSCRIPTION_TYPES[new_type]
+                    subscription.total_classes = details["classes"]
+                    subscription.price = details["price"]
+                    # Если использованные занятия теперь больше лимита – корректируем
+                    if subscription.used_classes > subscription.total_classes:
+                        subscription.used_classes = subscription.total_classes
+
+            # Также можем изменить total_classes напрямую, если были подарочные занятия
+            if hasattr(update_data, "total_classes") and update_data.total_classes is not None:  # type: ignore[attr-defined]
+                subscription.total_classes = update_data.total_classes  # type: ignore[attr-defined]
 
         # Сохраняем изменённый объект целиком
         row_num = await self._find_row_num(subscription.id)

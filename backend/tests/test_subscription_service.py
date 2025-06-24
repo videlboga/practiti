@@ -78,21 +78,26 @@ class TestSubscriptionService:
         mock_subscription_repository.save_subscription.assert_called_once_with(create_data)
     
     @pytest.mark.asyncio
-    async def test_create_subscription_with_active_subscription_fails(
+    async def test_create_multiple_active_subscriptions_allowed(
         self, subscription_service, mock_subscription_repository, sample_subscription
     ):
-        """Тест создания абонемента при наличии активного."""
-        # Arrange
+        """Теперь допускается создание нескольких активных абонементов."""
+
         create_data = SubscriptionCreateData(
             client_id="test-client-id",
             type=SubscriptionType.TRIAL
         )
-        
+
+        # Репозиторий сообщает, что уже есть активный
         mock_subscription_repository.get_active_subscriptions_by_client_id.return_value = [sample_subscription]
-        
-        # Act & Assert
-        with pytest.raises(BusinessLogicError, match="У клиента уже есть активный абонемент"):
-            await subscription_service.create_subscription(create_data)
+
+        # Ожидаем, что сервис всё равно вызывает save_subscription
+        mock_subscription_repository.save_subscription.return_value = sample_subscription
+
+        result = await subscription_service.create_subscription(create_data)
+
+        assert result == sample_subscription
+        mock_subscription_repository.save_subscription.assert_called_once_with(create_data)
     
     @pytest.mark.asyncio
     async def test_get_subscription_success(self, subscription_service, mock_subscription_repository, sample_subscription):

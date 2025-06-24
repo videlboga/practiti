@@ -131,6 +131,15 @@ class SubscriptionCreateRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500, description="Заметки")
 
 
+class SubscriptionUpdateRequest(BaseModel):
+    """Запрос на частичное обновление абонемента (статус, дата окончания)."""
+    status: Optional[SubscriptionStatus] = Field(None, description="Новый статус абонемента")
+    end_date: Optional[date] = Field(None, description="Новая дата окончания")
+    type: Optional[SubscriptionType] = Field(None, description="Изменить тип абонемента (не рекомендуется)")
+    used_classes: Optional[int] = Field(None, ge=0, description="Изменить число использованных занятий")
+    remaining_classes: Optional[int] = Field(None, ge=0, description="Прямое изменение оставшихся занятий")
+
+
 class SubscriptionResponse(BaseModel):
     """Ответ с данными абонемента."""
     id: str
