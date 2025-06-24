@@ -88,20 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics-alias"])
     app.include_router(bookings.router, prefix="/api", tags=["bookings-alias"])
     
-    # -----------------------------
-    #  Алиас для метрик дашборда
-    # -----------------------------
-
-    from .routers.analytics import get_dashboard_metrics as _dashboard_metrics_handler
-
-    # Фронтенд обращается к /api/dashboard/metrics, поэтому добавляем ручной маршрут
-    app.add_api_route(
-        path="/api/dashboard/metrics",
-        endpoint=_dashboard_metrics_handler,
-        methods=["GET"],
-        tags=["analytics-alias"],
-        name="dashboard-metrics-alias",
-    )
+    # Алиас /api/dashboard/metrics уже попадает через include_router(analytics.router, prefix="/api")
     
     logger.info("FastAPI приложение создано")
     return app

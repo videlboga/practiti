@@ -48,14 +48,20 @@ def _build_client_service() -> ClientServiceProtocol:
 
     from ...services.client_service import ClientService
 
-    # Во время pytest — in-memory, иначе Google Sheets
     if "pytest" in sys.modules:
         from ...repositories.in_memory_client_repository import InMemoryClientRepository
         repo = InMemoryClientRepository()
     else:
-        from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
-        from ...integrations.google_sheets import GoogleSheetsClient
-        repo = GoogleSheetsClientRepository(GoogleSheetsClient())
+        try:
+            from ...repositories.google_sheets_client_repository import GoogleSheetsClientRepository
+            from ...integrations.google_sheets import GoogleSheetsClient
+            repo = GoogleSheetsClientRepository(GoogleSheetsClient())
+        except Exception as e:
+            logger.error(
+                f"Не удалось создать GoogleSheetsClientRepository: {e}. Переключаюсь на InMemory.",
+            )
+            from ...repositories.in_memory_client_repository import InMemoryClientRepository  # noqa: WPS433
+            repo = InMemoryClientRepository()
 
     return ClientService(repo)
 
@@ -65,14 +71,20 @@ def _build_subscription_service() -> SubscriptionServiceProtocol:
 
     from ...services.subscription_service import SubscriptionService
 
-    # Во время тестов — in-memory, иначе Google Sheets
     if "pytest" in sys.modules:
         from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
         repo = InMemorySubscriptionRepository()
     else:
-        from ...repositories.google_sheets_subscription_repository import GoogleSheetsSubscriptionRepository
-        from ...integrations.google_sheets import GoogleSheetsClient
-        repo = GoogleSheetsSubscriptionRepository(GoogleSheetsClient())
+        try:
+            from ...repositories.google_sheets_subscription_repository import GoogleSheetsSubscriptionRepository
+            from ...integrations.google_sheets import GoogleSheetsClient
+            repo = GoogleSheetsSubscriptionRepository(GoogleSheetsClient())
+        except Exception as e:
+            logger.error(
+                f"Не удалось создать GoogleSheetsSubscriptionRepository: {e}. Переключаюсь на InMemory.",
+            )
+            from ...repositories.in_memory_subscription_repository import InMemorySubscriptionRepository  # noqa: WPS433
+            repo = InMemorySubscriptionRepository()
 
     return SubscriptionService(repo)
 
@@ -107,11 +119,21 @@ def _build_booking_service() -> BookingServiceProtocol:
         from ...repositories.in_memory_booking_repository import InMemoryBookingRepository
         repo = InMemoryBookingRepository()
     else:
-        from ...repositories.google_sheets_booking_repository import GoogleSheetsBookingRepository
-        from ...integrations.google_sheets import GoogleSheetsClient
-        repo = GoogleSheetsBookingRepository(GoogleSheetsClient())
+        try:
+            from ...repositories.google_sheets_booking_repository import GoogleSheetsBookingRepository
+            from ...integrations.google_sheets import GoogleSheetsClient
+            repo = GoogleSheetsBookingRepository(GoogleSheetsClient())
+        except Exception as e:
+            logger.error(
+                f"Не удалось создать GoogleSheetsBookingRepository: {e}. Переключаюсь на InMemory.",
+            )
+            from ...repositories.in_memory_booking_repository import InMemoryBookingRepository  # noqa: WPS433
+            repo = InMemoryBookingRepository()
 
-    return BookingService(repo)
+    # BookingService требует client_service и subscription_service
+    client_srv = _build_client_service()
+    sub_srv = _build_subscription_service()
+    return BookingService(repo, client_srv, sub_srv)
 
 
 # DI wrapper
@@ -413,17 +435,32 @@ async def get_dashboard_metrics(  # noqa: D401
 
     try:
         # Клиенты
-        clients = await client_service.get_all_clients()
+        try:
+            clients = await client_service.get_all_clients()
+        except Exception as e:
+            logger.error(f"Не удалось получить список клиентов для метрик: {e}")
+            clients = []
+
         total_clients = len(clients)
         active_clients = len([c for c in clients if c.status == ClientStatus.ACTIVE])
 
         # Абонементы
-        subscriptions = await subscription_service.get_all_subscriptions()
+        try:
+            subscriptions = await subscription_service.get_all_subscriptions()
+        except Exception as e:
+            logger.error(f"Не удалось получить список абонементов для метрик: {e}")
+            subscriptions = []
+
         total_subs = len(subscriptions)
         active_subs = len([s for s in subscriptions if s.status == SubscriptionStatus.ACTIVE])
 
         # Бронирования
-        bookings = await booking_service.list_bookings()
+        try:
+            bookings = await booking_service.list_bookings()
+        except Exception as e:
+            logger.error(f"Не удалось получить бронирования для метрик: {e}")
+            bookings = []
+
         total_bookings = len(bookings)
 
         now = datetime.utcnow()

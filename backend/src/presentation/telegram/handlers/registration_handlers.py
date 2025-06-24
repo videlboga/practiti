@@ -12,6 +12,7 @@ from ....models.registration import RegistrationState, REGISTRATION_STEPS
 from ....services.registration_service import RegistrationService
 from ....utils.logger import get_logger
 from ....utils.exceptions import ValidationError, BusinessLogicError
+from .. import templates as tpl
 
 logger = get_logger(__name__)
 
@@ -59,17 +60,7 @@ class RegistrationHandlers(BaseHandler):
             registration = self.registration_service.start_registration(user_id, username)
             
             # Отправляем приветственное сообщение
-            welcome_message = """
-🌟 **Добро пожаловать в йога-студию!**
-
-Давайте познакомимся! Я задам вам несколько вопросов, чтобы подобрать идеальные занятия йогой.
-
-📝 Процесс займет всего 2-3 минуты
-⏭️ Некоторые вопросы можно пропустить командой /skip
-❌ Отменить регистрацию: /cancel
-
-Готовы начать? 🚀
-            """.strip()
+            welcome_message = tpl.registration_welcome()
             
             # Отправляем приветственное сообщение
             if update.callback_query:
@@ -101,9 +92,7 @@ class RegistrationHandlers(BaseHandler):
         try:
             # Проверяем, активна ли регистрация
             if not self.registration_service.is_registration_active(user_id):
-                await update.message.reply_text(
-                    "❌ Регистрация не найдена. Начните заново с команды /start"
-                )
+                await update.message.reply_text(tpl.registration_not_found())
                 return ConversationHandler.END
             
             # Обрабатываем специальные команды
@@ -126,8 +115,16 @@ class RegistrationHandlers(BaseHandler):
             return REGISTRATION_INPUT
             
         except ValidationError as e:
-            # Ошибка валидации - показываем пользователю
-            await update.message.reply_text(f"❌ {str(e)}\n\nПопробуйте еще раз:")
+            # Ошибка валидации - выводим только понятное сообщение без технических деталей
+            try:
+                # Берём текст первой ошибки Pydantic
+                first_err = e.errors()[0]
+                details = first_err.get("msg", "Неверное значение")
+            except Exception:
+                details = "Неверное значение"
+
+            friendly_error = tpl.registration_validation_error(details)
+            await update.message.reply_text(friendly_error)
             return REGISTRATION_INPUT
             
         except BusinessLogicError as e:
@@ -152,17 +149,7 @@ class RegistrationHandlers(BaseHandler):
             success = await self.registration_service.complete_registration(user_id)
             
             if success:
-                success_message = """
-🎉 **Регистрация завершена!**
-
-Добро пожаловать в нашу йога-студию! 
-
-✅ Ваши данные сохранены
-📱 Теперь вы можете записываться на занятия
-💬 Используйте /help для просмотра доступных команд
-
-Намасте! 🙏
-                """.strip()
+                success_message = tpl.registration_success()
                 
                 # Проверяем, это callback_query или обычное сообщение
                 if update.callback_query:
@@ -171,11 +158,10 @@ class RegistrationHandlers(BaseHandler):
                     await update.message.reply_text(success_message)
                 return ConversationHandler.END
             else:
-                error_message = "❌ Произошла ошибка при завершении регистрации. Попробуйте еще раз."
                 if update.callback_query:
-                    await update.callback_query.edit_message_text(error_message)
+                    await update.callback_query.edit_message_text(tpl.generic_error())
                 else:
-                    await update.message.reply_text(error_message)
+                    await update.message.reply_text(tpl.generic_error())
                 return REGISTRATION_CONFIRM
                 
         except Exception as e:
@@ -192,7 +178,7 @@ class RegistrationHandlers(BaseHandler):
             state: Текущее состояние регистрации
         """
         if state not in REGISTRATION_STEPS:
-            await update.message.reply_text("❌ Ошибка в процессе регистрации")
+            await update.message.reply_text(tpl.registration_process_error())
             return
         
         step = REGISTRATION_STEPS[state]
@@ -202,13 +188,7 @@ class RegistrationHandlers(BaseHandler):
         if step.help_text:
             message += f"💡 {step.help_text}"
         
-        # Создаем инлайн клавиатуру если есть опции
-        reply_markup = None
-        if step.options:
-            keyboard = []
-            for option in step.options:
-                keyboard.append([InlineKeyboardButton(option, callback_data=f"reg_{option}")])
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = tpl.options_keyboard(step.options) if step.options else None
         
         await update.message.reply_text(message, reply_markup=reply_markup)
     
@@ -223,23 +203,12 @@ class RegistrationHandlers(BaseHandler):
         """
         summary = registration.get_summary()
         
-        confirmation_message = f"""
-{summary}
-
-✅ **Все верно?**
-
-Если данные корректны, нажмите "Подтвердить".
-Если нужно что-то изменить, нажмите "Изменить".
-        """.strip()
+        confirmation_message = tpl.registration_confirmation(summary)
         
-        keyboard = [
-            [InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_yes")],
-            [InlineKeyboardButton("✏️ Изменить", callback_data="confirm_edit")],
-            [InlineKeyboardButton("❌ Отменить", callback_data="confirm_cancel")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(confirmation_message, reply_markup=reply_markup)
+        await update.message.reply_text(
+            confirmation_message,
+            reply_markup=tpl.registration_confirmation_keyboard(),
+        )
     
     async def _cancel_registration(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> None:
         """
@@ -252,13 +221,7 @@ class RegistrationHandlers(BaseHandler):
         """
         self.registration_service.cancel_registration(user_id)
         
-        cancel_message = """
-❌ **Регистрация отменена**
-
-Если передумаете, просто напишите /start снова.
-
-До встречи! 👋
-        """.strip()
+        cancel_message = tpl.registration_cancelled()
         
         await update.message.reply_text(cancel_message)
     
@@ -287,11 +250,8 @@ class RegistrationHandlers(BaseHandler):
             elif callback_data == "confirm_edit":
                 # Перезапускаем регистрацию
                 self.registration_service.cancel_registration(user_id)
-                await query.edit_message_text("🔄 Начинаем регистрацию заново...")
+                await query.edit_message_text(tpl.registration_restart())
                 return await self.start_registration(update, context)
-            elif callback_data == "confirm_cancel":
-                await self._cancel_registration(update, context, user_id)
-                return ConversationHandler.END
             
             # Обрабатываем выбор опций регистрации
             elif callback_data.startswith("reg_"):
@@ -311,7 +271,7 @@ class RegistrationHandlers(BaseHandler):
                 return REGISTRATION_INPUT
                 
         except ValidationError as e:
-            await query.edit_message_text(f"❌ {str(e)}\n\nПопробуйте еще раз:")
+            await query.edit_message_text(tpl.registration_validation_error(str(e)))
             return REGISTRATION_INPUT
             
         except Exception as e:
@@ -325,7 +285,7 @@ class RegistrationHandlers(BaseHandler):
         Отправить текущий вопрос через callback query.
         """
         if state not in REGISTRATION_STEPS:
-            await query.edit_message_text("❌ Ошибка в процессе регистрации")
+            await query.edit_message_text(tpl.registration_process_error())
             return
         
         step = REGISTRATION_STEPS[state]
@@ -335,13 +295,7 @@ class RegistrationHandlers(BaseHandler):
         if step.help_text:
             message += f"💡 {step.help_text}"
         
-        # Создаем инлайн клавиатуру если есть опции
-        reply_markup = None
-        if step.options:
-            keyboard = []
-            for option in step.options:
-                keyboard.append([InlineKeyboardButton(option, callback_data=f"reg_{option}")])
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = tpl.options_keyboard(step.options) if step.options else None
         
         await query.edit_message_text(message, reply_markup=reply_markup)
     
@@ -351,30 +305,19 @@ class RegistrationHandlers(BaseHandler):
         """
         summary = registration.get_summary()
         
-        confirmation_message = f"""
-{summary}
-
-✅ **Все верно?**
-
-Если данные корректны, нажмите "Подтвердить".
-Если нужно что-то изменить, нажмите "Изменить".
-        """.strip()
+        confirmation_message = tpl.registration_confirmation(summary)
         
-        keyboard = [
-            [InlineKeyboardButton("✅ Подтвердить", callback_data="confirm_yes")],
-            [InlineKeyboardButton("✏️ Изменить", callback_data="confirm_edit")],
-            [InlineKeyboardButton("❌ Отменить", callback_data="confirm_cancel")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(confirmation_message, reply_markup=reply_markup)
+        await query.edit_message_text(
+            confirmation_message,
+            reply_markup=tpl.registration_confirmation_keyboard(),
+        )
     
     async def _send_current_question_for_callback(self, message, context: ContextTypes.DEFAULT_TYPE, state: RegistrationState) -> None:
         """
         Отправить текущий вопрос через обычное сообщение (для callback).
         """
         if state not in REGISTRATION_STEPS:
-            await message.reply_text("❌ Ошибка в процессе регистрации")
+            await message.reply_text(tpl.registration_process_error())
             return
         
         step = REGISTRATION_STEPS[state]
@@ -384,12 +327,6 @@ class RegistrationHandlers(BaseHandler):
         if step.help_text:
             message_text += f"💡 {step.help_text}"
         
-        # Создаем инлайн клавиатуру если есть опции
-        reply_markup = None
-        if step.options:
-            keyboard = []
-            for option in step.options:
-                keyboard.append([InlineKeyboardButton(option, callback_data=f"reg_{option}")])
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = tpl.options_keyboard(step.options) if step.options else None
         
         await message.reply_text(message_text, reply_markup=reply_markup) 

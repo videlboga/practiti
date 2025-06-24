@@ -24,6 +24,7 @@ from ....services.protocols.booking_service import BookingServiceProtocol
 from ....services.protocols.client_service import ClientServiceProtocol
 from ....models.booking import BookingCreateData
 from ....utils.exceptions import BusinessLogicError
+from .. import templates as tpl
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +57,11 @@ class BookingHandlers(BaseHandler):
             client = await self.client_service.get_client_by_telegram_id(user_id)
 
             if not client:
-                msg = (
-                    "📝 Сначала пройдите регистрацию в студии.\n"
-                    "Используйте /register, это займёт пару минут."
-                )
-                if update.effective_chat:
-                    await update.effective_chat.send_message(msg)
+                await update.effective_chat.send_message(tpl.booking_not_registered())
                 return ConversationHandler.END
 
-            prompt = (
-                "📅 Введите *дату*, *время* и *тип* занятия через пробел.\n\n"
-                "Формат: `YYYY-MM-DD HH:MM тип`\n"
-                "Пример: `2025-07-01 19:00 хатха`"
-            )
             if update.effective_chat:
-                await update.effective_chat.send_message(prompt, parse_mode="Markdown")
+                await update.effective_chat.send_message(tpl.booking_prompt(), parse_mode="Markdown")
             return BOOKING_INPUT
         except Exception as e:
             await self.handle_error(update, context, e)
@@ -87,8 +78,7 @@ class BookingHandlers(BaseHandler):
         text = update.message.text.strip()
         parts = text.split()
         if len(parts) < 3:
-            await update.effective_chat.send_message(
-                "❌ Неверный формат. Попробуйте ещё раз или /cancel." )
+            await update.effective_chat.send_message(tpl.booking_invalid_format())
             return BOOKING_INPUT
 
         date_part, time_part, *class_type_parts = parts
@@ -97,15 +87,14 @@ class BookingHandlers(BaseHandler):
         try:
             class_dt = datetime.strptime(f"{date_part} {time_part}", "%Y-%m-%d %H:%M")
         except ValueError:
-            await update.effective_chat.send_message(
-                "❌ Не удалось разобрать дату/время. Используйте формат YYYY-MM-DD HH:MM.")
+            await update.effective_chat.send_message(tpl.booking_invalid_datetime())
             return BOOKING_INPUT
 
         # Проверяем клиента
         user_id = update.effective_user.id  # type: ignore[assignment]
         client = await self.client_service.get_client_by_telegram_id(user_id)
         if not client:
-            await update.effective_chat.send_message("❌ Клиент не найден. Пройдите регистрацию /register.")
+            await update.effective_chat.send_message(tpl.booking_not_registered())
             return ConversationHandler.END
 
         # Формируем данные записи
@@ -117,14 +106,13 @@ class BookingHandlers(BaseHandler):
 
         try:
             booking = await self.booking_service.create_booking(create_data)
-            await update.effective_chat.send_message(
-                f"✅ Запись создана! До встречи {class_dt.strftime('%d.%m %H:%M')} ✨")
+            await update.effective_chat.send_message(tpl.booking_success(class_dt))
             logger.info("Создана запись %s через Telegram для клиента %s", booking.id, client.id)
         except (ValueError, BusinessLogicError) as be:
-            await update.effective_chat.send_message(f"🚫 Не удалось создать запись: {be}")
+            await update.effective_chat.send_message(tpl.booking_failure(str(be)))
         except Exception as e:
             logger.exception("Ошибка создания бронирования: %s", e)
-            await update.effective_chat.send_message("🚫 Произошла ошибка. Попробуйте позже.")
+            await update.effective_chat.send_message(tpl.generic_error())
 
         return ConversationHandler.END
 
@@ -134,7 +122,7 @@ class BookingHandlers(BaseHandler):
 
     async def cancel_booking(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:  # type: ignore[override]
         if update.effective_chat:
-            await update.effective_chat.send_message("❌ Запись отменена.")
+            await update.effective_chat.send_message(tpl.booking_cancelled())
         return ConversationHandler.END
 
     # ------------------------------------------------------------------

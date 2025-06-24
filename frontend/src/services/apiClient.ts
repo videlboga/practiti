@@ -150,6 +150,6 @@ export interface DashboardMetrics {
 }
 
 export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
-  const { data } = await api.get<DashboardMetrics>('/api/dashboard/metrics');
+  const { data } = await api.get<DashboardMetrics>('/api/analytics/dashboard/metrics');
   return data;
 }; 

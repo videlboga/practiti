@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 📋 Обработчики команд Telegram Bot
 
@@ -11,6 +13,9 @@ from telegram.ext import ContextTypes
 
 from .base_handler import BaseHandler
 from ....services.protocols.client_service import ClientServiceProtocol
+from ....services.protocols.notification_service import NotificationServiceProtocol
+from ....models.client import ClientStatus, ClientUpdateData
+from .. import templates as tpl
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +27,25 @@ class CommandHandlers(BaseHandler):
     Обрабатывает:
     - /start - приветствие и регистрация
     - /help - справка по командам
+    - /classes (/my_bookings) – список будущих записей
     """
     
-    def __init__(self, client_service: ClientServiceProtocol):
-        """
-        Инициализация обработчика команд.
-        
+    def __init__(
+        self,
+        client_service: ClientServiceProtocol,
+        booking_service: "BookingServiceProtocol | None" = None,
+        notification_service: "NotificationServiceProtocol | None" = None,
+    ) -> None:
+        """Инициализация обработчика команд.
+
         Args:
-            client_service: Сервис для работы с клиентами
+            client_service: Сервис клиентов
+            booking_service: Сервис бронирований (может быть None в тестах)
+            notification_service: Сервис уведомлений (может быть None в тестах)
         """
         super().__init__(client_service)
+        self.booking_service = booking_service
+        self.notification_service = notification_service
         logger.info("CommandHandlers инициализирован")
     
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -56,26 +70,27 @@ class CommandHandlers(BaseHandler):
             # Проверяем, зарегистрирован ли пользователь
             existing_client = await self.client_service.get_client_by_telegram_id(user_id)
             
-            if existing_client:
+            if existing_client and existing_client.status == ClientStatus.ACTIVE:
+                # Авто-коррекция имени, если пользователь сменил его в Telegram
+                if first_name and first_name != existing_client.name:
+                    await self.client_service.update_client(
+                        existing_client.id,
+                        ClientUpdateData(name=first_name),
+                    )
+                    existing_client.name = first_name  # обновляем локально
+                    logger.info(
+                        "Имя клиента обновлено с %s на %s по данным Telegram",
+                        existing_client.name,
+                        first_name,
+                    )
+
                 # Пользователь уже зарегистрирован
-                welcome_message = (
-                    f"👋 Добро пожаловать обратно, {existing_client.name}!\n\n"
-                    f"🧘‍♀️ Вы зарегистрированы в йога-студии\n\n"
-                    f"📋 Используйте /help для просмотра доступных команд"
-                )
+                welcome_message = tpl.welcome_back(existing_client.name)
                 
                 logger.info(f"Команда /start: существующий клиент {existing_client.name}")
             else:
                 # Новый пользователь
-                welcome_message = (
-                    f"🌟 Добро пожаловать в Practiti!\n\n"
-                    f"👋 Привет, {first_name or 'друг'}!\n\n"
-                    f"📝 Для записи на занятия нужно пройти регистрацию.\n"
-                    f"Это займет всего пару минут!\n\n"
-                    f"🔹 /register - начать регистрацию\n"
-                    f"🔹 /help - посмотреть все команды\n"
-                    f"🔹 /info - узнать о студии"
-                )
+                welcome_message = tpl.welcome_new(first_name)
                 
                 logger.info(f"Команда /start: новый пользователь @{username}")
             
@@ -99,47 +114,14 @@ class CommandHandlers(BaseHandler):
             # Проверяем статус пользователя
             existing_client = await self.client_service.get_client_by_telegram_id(user_id)
             
-            if existing_client:
+            if existing_client and existing_client.status == ClientStatus.ACTIVE:
                 # Команды для зарегистрированного пользователя
-                help_message = (
-                    "📋 **Доступные команды:**\n\n"
-                    "🔹 **Основные:**\n"
-                    "/start - главное меню\n"
-                    "/help - эта справка\n"
-                    "/info - информация о студии\n\n"
-                    "🔹 **Мой профиль:**\n"
-                    "/profile - мои данные\n"
-                    "/subscriptions - мои абонементы\n"
-                    "/classes - записи на занятия\n\n"
-                    "🔹 **Занятия:**\n"
-                    "/schedule - расписание\n"
-                    "/book - записаться на занятие\n\n"
-                    "🔹 **Поддержка:**\n"
-                    "/contact - связь с администратором\n"
-                    "/faq - часто задаваемые вопросы\n\n"
-                    "✨ Ваш путь к гармонии! 🧘‍♀️"
-                )
+                help_message = tpl.help_registered()
                 
                 logger.info(f"Команда /help: зарегистрированный клиент {existing_client.name}")
             else:
                 # Команды для незарегистрированного пользователя
-                help_message = (
-                    "📋 **Доступные команды:**\n\n"
-                    "🔹 **Для начала:**\n"
-                    "/start - главное меню\n"
-                    "/register - пройти регистрацию\n"
-                    "/help - эта справка\n\n"
-                    "🔹 **Информация:**\n"
-                    "/info - о студии\n"
-                    "/address - адрес и контакты\n"
-                    "/prices - цены на абонементы\n"
-                    "/schedule - расписание занятий\n\n"
-                    "🔹 **Поддержка:**\n"
-                    "/contact - связь с администратором\n"
-                    "/faq - часто задаваемые вопросы\n\n"
-                    "📝 **Для записи на занятия необходима регистрация!**\n\n"
-                    "✨ Просто начните! 🌟"
-                )
+                help_message = tpl.help_unregistered()
                 
                 logger.info("Команда /help: незарегистрированный пользователь")
             
@@ -201,7 +183,7 @@ class CommandHandlers(BaseHandler):
             # Проверяем, не зарегистрирован ли уже пользователь
             existing_client = await self.client_service.get_client_by_telegram_id(user_id)
             
-            if existing_client:
+            if existing_client and existing_client.status == ClientStatus.ACTIVE:
                 # Пользователь уже зарегистрирован
                 already_registered_message = (
                     f"✅ {existing_client.name}, вы уже зарегистрированы!\n\n"
@@ -213,6 +195,7 @@ class CommandHandlers(BaseHandler):
                     await update.effective_chat.send_message(already_registered_message)
                     
                 logger.info(f"Команда /register: пользователь {existing_client.name} уже зарегистрирован")
+                return
             else:
                 # Новый пользователь - перенаправляем к registration handlers
                 # Здесь будет интеграция с RegistrationHandlers
@@ -256,6 +239,7 @@ class CommandHandlers(BaseHandler):
         try:
             user_id, username, _ = await self.get_user_info(update)
             
+            # --- Чистим активные регистрации (черновики) ---
             # Получаем registration_service из application.bot_data
             bot_instance = context.application.bot_data.get('bot_instance')
             if bot_instance and hasattr(bot_instance, 'registration_service'):
@@ -264,7 +248,21 @@ class CommandHandlers(BaseHandler):
                 # Очищаем ВСЕ регистрации (для отладки)
                 count = registration_service.clear_all_registrations()
                 
-                message = f"✅ Очищено {count} активных регистраций. Можете начать заново с /register"
+                # --- Дополнительно удаляем клиента из репозитория по Telegram ID ---
+                removed_client = None
+                try:
+                    client = await self.client_service.get_client_by_telegram_id(user_id)
+                    if client:
+                        await self.client_service.delete_client(client.id)
+                        removed_client = client.name
+                except Exception as cleanup_err:
+                    logger.warning(f"Не удалось удалить клиента при очистке: {cleanup_err}")
+
+                extra = f", профиль {removed_client} удалён" if removed_client else ""
+                message = (
+                    f"✅ Очищено {count} черновиков регистрации{extra}.\n"
+                    "Можете начать заново с /register"
+                )
                 logger.info(f"Очищено {count} активных регистраций по команде от @{username}")
             else:
                 message = "❌ Ошибка доступа к сервису регистрации"
@@ -524,17 +522,114 @@ class CommandHandlers(BaseHandler):
             user_id, username, _ = await self.get_user_info(update)
             logger.info(f"Неизвестная команда от @{username} (ID: {user_id}): {update.message.text}")
             
-            unknown_message = (
-                "🤔 Команда не найдена.\n\n"
-                "📋 Используйте /help для просмотра всех доступных команд.\n\n"
-                "💡 Возможно, вы имели в виду:\n"
-                "• /start - главное меню\n"
-                "• /info - о студии\n"
-                "• /register - регистрация"
-            )
-            
             if update.effective_chat:
-                await update.effective_chat.send_message(unknown_message)
+                await update.effective_chat.send_message(tpl.unknown_command_message())
                 
+        except Exception as e:
+            await self.handle_error(update, context, e)
+
+    async def classes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:  # type: ignore[override]
+        """Отправляет список будущих занятий пользователя."""
+
+        await self.log_command(update, "classes")
+
+        if not self.booking_service:
+            if update.effective_chat:
+                await update.effective_chat.send_message(tpl.feature_unavailable())
+            return
+
+        try:
+            user_id, _, first_name = await self.get_user_info(update)
+
+            client = await self.client_service.get_client_by_telegram_id(user_id)
+            if not client:
+                if update.effective_chat:
+                    await update.effective_chat.send_message(
+                        "📝 Сначала пройдите регистрацию командой /register." )
+                return
+
+            # Получаем все бронирования и фильтруем будущие
+            bookings = await self.booking_service.list_bookings()
+
+            from datetime import datetime
+            from ....models.booking import BookingStatus
+
+            upcoming = [
+                b for b in bookings
+                if b.client_id == client.id and b.status not in {BookingStatus.CANCELLED, BookingStatus.MISSED}
+                and b.class_date > datetime.now()
+            ]
+
+            upcoming.sort(key=lambda b: b.class_date)
+
+            if not upcoming:
+                msg = "У вас нет предстоящих записей. Используйте /book, чтобы записаться."
+            else:
+                lines = [
+                    "📅 *Ваши предстоящие занятия:*\n"
+                ]
+                for idx, b in enumerate(upcoming, 1):
+                    dt_str = b.class_date.strftime("%d.%m %H:%M")
+                    lines.append(f"{idx}. {dt_str} — {b.class_type}")
+                msg = "\n".join(lines)
+
+            if update.effective_chat:
+                await update.effective_chat.send_message(msg, parse_mode="Markdown")
+
+        except Exception as e:
+            await self.handle_error(update, context, e)
+
+    # ------------------------------------------------------------------
+    # Административная / тестовая команда для проверки уведомлений
+    # ------------------------------------------------------------------
+
+    async def notify_test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: D401
+        """Отправить тестовое уведомление текущему пользователю.
+
+        Создаёт уведомление типа GENERAL_INFO через NotificationService и
+        сразу отправляет его (или просто пишет сообщение, если сервис не
+        доступен). Используется администраторами для быстрой проверки
+        доставки.
+        """
+
+        await self.log_command(update, "notify_test")
+
+        try:
+            user_id, username, first_name = await self.get_user_info(update)
+
+            # Ищем клиента по Telegram ID
+            client = await self.client_service.get_client_by_telegram_id(user_id)
+
+            if not client:
+                # Если клиент не найден, просто отправляем сообщение
+                if update.effective_chat:
+                    await update.effective_chat.send_message(
+                        "Похоже, вы ещё не зарегистрированы. Сначала пройдите /register."
+                    )
+                return
+
+            # Пытаемся отправить уведомление через NotificationService
+            if self.notification_service:
+                from ....models.notification import NotificationType
+
+                success = await self.notification_service.send_immediate_notification(
+                    client_id=client.id,
+                    notification_type=NotificationType.GENERAL_INFO,
+                    template_data={
+                        "client_name": client.name,
+                        "message": "Это тестовое уведомление. Всё работает! ✅",
+                    },
+                )
+
+                if update.effective_chat:
+                    if success:
+                        await update.effective_chat.send_message(tpl.test_notification_sent())
+                    else:
+                        await update.effective_chat.send_message(tpl.test_notification_failed())
+            else:
+                # Fallback: напрямую отправляем сообщение в чат
+                if update.effective_chat:
+                    await update.effective_chat.send_message(tpl.test_notification_message())
+
         except Exception as e:
             await self.handle_error(update, context, e) 

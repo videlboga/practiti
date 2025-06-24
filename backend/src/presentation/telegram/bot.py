@@ -18,6 +18,7 @@ from telegram import Update
 from ...config.settings import TelegramConfig
 from ...services.protocols.client_service import ClientServiceProtocol
 from ...services.protocols.subscription_service import SubscriptionServiceProtocol
+from ...services.protocols.scheduler_service import SchedulerServiceProtocol
 from .handlers.command_handlers import CommandHandlers
 from .handlers.booking_handlers import BookingHandlers, BOOKING_INPUT
 
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 # Импортируем состояния из registration_handlers
 from .handlers.registration_handlers import REGISTRATION_INPUT, REGISTRATION_CONFIRM
+
+from . import templates as tpl
 
 
 class PrakritiTelegramBot:
@@ -42,7 +45,8 @@ class PrakritiTelegramBot:
         self, 
         config: TelegramConfig,
         client_service: ClientServiceProtocol,
-        subscription_service: SubscriptionServiceProtocol
+        subscription_service: SubscriptionServiceProtocol,
+        scheduler_service: "SchedulerServiceProtocol | None" = None,
     ):
         """
         Инициализация Telegram Bot.
@@ -51,10 +55,12 @@ class PrakritiTelegramBot:
             config: Конфигурация Telegram Bot
             client_service: Сервис для работы с клиентами
             subscription_service: Сервис для работы с абонементами
+            scheduler_service: Сервис для работы с расписанием (опционально)
         """
         self.config = config
         self.client_service = client_service
         self.subscription_service = subscription_service
+        self.scheduler_service = scheduler_service
         
         # Создаем приложение бота
         self.application: Optional[Application] = None
@@ -75,9 +81,35 @@ class PrakritiTelegramBot:
             from ...integrations.google_sheets import GoogleSheetsClient
             booking_repo = GoogleSheetsBookingRepository(GoogleSheetsClient())
 
-        self.booking_service = BookingService(booking_repo, client_service, subscription_service)
+        self.booking_service = BookingService(
+            booking_repo,
+            client_service,
+            subscription_service,
+            self.scheduler_service,
+        )
 
-        self.command_handlers = CommandHandlers(client_service)
+        # ---------------- Notification Service -----------------
+        from ...repositories.google_sheets_notification_repository import GoogleSheetsNotificationRepository
+        from ...services.notification_service import NotificationService
+        from ...integrations.google_sheets import GoogleSheetsClient
+        from ...services.telegram_sender_service import TelegramSenderService
+
+        notification_repo = GoogleSheetsNotificationRepository(GoogleSheetsClient())
+        telegram_sender = TelegramSenderService()
+        self.notification_service = NotificationService(
+            notification_repo,
+            client_service,
+            subscription_service,
+            telegram_sender,
+        )
+
+        # ---------------------------------------------------------
+
+        self.command_handlers = CommandHandlers(
+            client_service,
+            self.booking_service,
+            self.notification_service,
+        )
         self.booking_handlers = BookingHandlers(self.booking_service, client_service)
         self.registration_handlers = RegistrationHandlers(self.registration_service)
         
@@ -146,6 +178,16 @@ class PrakritiTelegramBot:
         )
         self.application.add_handler(
             CommandHandler("schedule", self.command_handlers.schedule_command)
+        )
+        
+        # /classes (my bookings)
+        self.application.add_handler(
+            CommandHandler(["classes", "my_bookings"], self.command_handlers.classes_command)
+        )
+        
+        # Команда для теста уведомлений
+        self.application.add_handler(
+            CommandHandler("notify_test", self.command_handlers.notify_test_command)
         )
         
         # ConversationHandler для регистрации
@@ -239,6 +281,8 @@ class PrakritiTelegramBot:
             BotCommand("schedule", "📅 Расписание"),
             BotCommand("book", "✏️ Записаться на занятие"),
             BotCommand("contact", "📞 Контакты"),
+            BotCommand("classes", "📅 Мои занятия"),
+            BotCommand("notify_test", "🔔 Тест уведомлений"),
         ]
         
         if self.application and self.application.bot:
@@ -271,10 +315,7 @@ class PrakritiTelegramBot:
         # Пытаемся отправить пользователю сообщение об ошибке
         if update and update.effective_chat:
             try:
-                await update.effective_chat.send_message(
-                    "🚫 Произошла неожиданная ошибка. "
-                    "Администратор уведомлен. Попробуйте позже."
-                )
+                await update.effective_chat.send_message(tpl.generic_error())
             except Exception as send_error:
                 logger.error(f"Не удалось отправить сообщение об ошибке: {send_error}")
         

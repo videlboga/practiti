@@ -13,6 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from ....services.protocols.client_service import ClientServiceProtocol
+from .. import templates as tpl
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +94,7 @@ class BaseHandler(ABC):
             
             # Отправляем пользователю сообщение об ошибке
             if update.effective_chat:
-                await update.effective_chat.send_message(
-                    "🚫 Произошла ошибка при обработке команды. "
-                    "Попробуйте позже или обратитесь к администратору."
-                )
+                await update.effective_chat.send_message(tpl.generic_error())
         except Exception as log_error:
             logger.critical(f"Критическая ошибка при обработке ошибки: {log_error}")
     

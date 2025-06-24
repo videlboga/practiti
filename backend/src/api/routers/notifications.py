@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import logging
 import math
+import sys
 
 from ..models import (
     NotificationCreateRequest, NotificationResponse, NotificationSearchRequest,
@@ -34,14 +35,21 @@ async def get_notification_service() -> NotificationServiceProtocol:
     from ...services.client_service import ClientService
     from ...services.subscription_service import SubscriptionService
     from ...services.telegram_sender_service import TelegramSenderService
-    from ...config.settings import settings
-    
-    if settings.environment == "testing":
+
+    # Во время запуска pytest всегда берём репозиторий в памяти, чтобы исключить
+    # внешние зависимости и обеспечить изоляцию тестов.
+    if "pytest" in sys.modules:
         notification_repository = InMemoryNotificationRepository()
     else:
-        from ...repositories.google_sheets_notification_repository import GoogleSheetsNotificationRepository
-        from ...integrations.google_sheets import GoogleSheetsClient
-        notification_repository = GoogleSheetsNotificationRepository(GoogleSheetsClient())
+        try:
+            from ...repositories.google_sheets_notification_repository import GoogleSheetsNotificationRepository
+            from ...integrations.google_sheets import GoogleSheetsClient
+            notification_repository = GoogleSheetsNotificationRepository(GoogleSheetsClient())
+        except Exception as e:  # pragma: no cover – graceful fallback
+            logger.error(
+                f"Не удалось создать GoogleSheetsNotificationRepository: {e}. Переключаюсь на InMemory."
+            )
+            notification_repository = InMemoryNotificationRepository()
     
     # Создаем сервисы (используем такие же фабрики, как в других роутерах)
     from ...api.routers.clients import _build_client_service as _cs

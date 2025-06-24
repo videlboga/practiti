@@ -66,15 +66,53 @@ class PrakritiApplication:
         logger.info("Инициализация компонентов приложения...")
         
         try:
-            # Временно используем репозитории в памяти для тестирования
-            logger.info("Инициализация временных репозиториев в памяти...")
-            from .repositories.in_memory_client_repository import InMemoryClientRepository
-            from .repositories.in_memory_subscription_repository import InMemorySubscriptionRepository
-            from .repositories.in_memory_notification_repository import InMemoryNotificationRepository
-            
-            client_repository = InMemoryClientRepository()
-            subscription_repository = InMemorySubscriptionRepository()
-            notification_repository = InMemoryNotificationRepository()
+            # Сначала пытаемся инициализировать репозитории Google Sheets,
+            # при любой ошибке gracefully переключаемся на InMemory.
+            logger.info("Попытка инициализировать Google Sheets репозитории...")
+
+            try:
+                from .integrations.google_sheets import GoogleSheetsClient
+                from .repositories.google_sheets_client_repository import (
+                    GoogleSheetsClientRepository,
+                )
+                from .repositories.google_sheets_subscription_repository import (
+                    GoogleSheetsSubscriptionRepository,
+                )
+
+                sheets_client = GoogleSheetsClient()
+                client_repository = GoogleSheetsClientRepository(sheets_client)
+                subscription_repository = GoogleSheetsSubscriptionRepository(sheets_client)
+
+                logger.info("Google Sheets репозитории успешно инициализированы")
+
+                # Для уведомлений пока оставляем in-memory, так как полноценный
+                # Google Sheets репозиторий ещё не реализован.
+                from .repositories.in_memory_notification_repository import (
+                    InMemoryNotificationRepository,
+                )
+
+                notification_repository = InMemoryNotificationRepository()
+
+            except Exception as gs_err:
+                logger.warning(
+                    "Не удалось инициализировать Google Sheets репозитории: %s. "
+                    "Переключаюсь на InMemory.",
+                    gs_err,
+                )
+
+                from .repositories.in_memory_client_repository import (
+                    InMemoryClientRepository,
+                )
+                from .repositories.in_memory_subscription_repository import (
+                    InMemorySubscriptionRepository,
+                )
+                from .repositories.in_memory_notification_repository import (
+                    InMemoryNotificationRepository,
+                )
+
+                client_repository = InMemoryClientRepository()
+                subscription_repository = InMemorySubscriptionRepository()
+                notification_repository = InMemoryNotificationRepository()
             
             # Инициализируем сервисы
             logger.info("Инициализация ClientService...")
@@ -117,7 +155,8 @@ class PrakritiApplication:
             self.telegram_bot = PrakritiTelegramBot(
                 telegram_config, 
                 self.client_service, 
-                self.subscription_service
+                self.subscription_service,
+                self.scheduler_service,
             )
             await self.telegram_bot.initialize()
             
