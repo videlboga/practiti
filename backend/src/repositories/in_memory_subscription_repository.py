@@ -263,6 +263,7 @@ class InMemorySubscriptionRepository(SubscriptionRepositoryProtocol):
             SubscriptionType.TRIAL: 500,
             SubscriptionType.SINGLE: 1100,
             SubscriptionType.PACKAGE_4: 3200,
+            SubscriptionType.PACKAGE_4_REGULAR: 4000,
             SubscriptionType.PACKAGE_8: 7000,
             SubscriptionType.PACKAGE_12: 9000,
             SubscriptionType.UNLIMITED: 10800,
@@ -275,6 +276,7 @@ class InMemorySubscriptionRepository(SubscriptionRepositoryProtocol):
             SubscriptionType.TRIAL: 1,
             SubscriptionType.SINGLE: 1,
             SubscriptionType.PACKAGE_4: 4,
+            SubscriptionType.PACKAGE_4_REGULAR: 4,
             SubscriptionType.PACKAGE_8: 8,
             SubscriptionType.PACKAGE_12: 12,
             SubscriptionType.UNLIMITED: 999,  # Безлимитный
@@ -283,9 +285,9 @@ class InMemorySubscriptionRepository(SubscriptionRepositoryProtocol):
     
     def _calculate_end_date(self, subscription_type: SubscriptionType, start_date: date) -> date:
         """Рассчитать дату окончания абонемента."""
-        if subscription_type == SubscriptionType.TRIAL:
-            return start_date + timedelta(days=14)
-        elif subscription_type == SubscriptionType.SINGLE:
-            return start_date + timedelta(days=1)  # Разовое занятие действует один день
+        if subscription_type in {SubscriptionType.TRIAL, SubscriptionType.SINGLE}:
+            return start_date + timedelta(days=60)
+        elif subscription_type == SubscriptionType.UNLIMITED:
+            return start_date + timedelta(days=30)
         else:
-            return start_date + timedelta(days=30)  # Все остальные - 30 дней 
+            return start_date + timedelta(days=60) 

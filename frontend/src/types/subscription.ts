@@ -2,6 +2,7 @@ export type SubscriptionType =
   | 'trial'
   | 'single'
   | 'package_4'
+  | 'package_4_regular'
   | 'package_8'
   | 'package_12'
   | 'unlimited';

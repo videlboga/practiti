@@ -17,7 +17,8 @@ interface SubscriptionFormProps {
 const typeOptions: { value: SubscriptionType; label: string }[] = [
   { value: 'trial', label: 'Пробное (1)' },
   { value: 'single', label: 'Разовое (1)' },
-  { value: 'package_4', label: 'Пакет 4 занятия' },
+  { value: 'package_4', label: 'Пакет 4 занятия (новичок)' },
+  { value: 'package_4_regular', label: 'Пакет 4 занятия (обычный)' },
   { value: 'package_8', label: 'Пакет 8 занятий' },
   { value: 'package_12', label: 'Пакет 12 занятий' },
   { value: 'unlimited', label: 'Безлимит' },

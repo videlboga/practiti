@@ -24,11 +24,12 @@ logger = get_logger(__name__)
 
 # Константа с параметрами абонементов (кол-во занятий, длительность, цена)
 SUBSCRIPTION_TYPES = {
-    SubscriptionType.TRIAL:    {"classes": 1,  "duration_days": 14, "price": 500},
-    SubscriptionType.SINGLE:   {"classes": 1,  "duration_days": 30, "price": 1100},
-    SubscriptionType.PACKAGE_4:  {"classes": 4,  "duration_days": 30, "price": 3200},
-    SubscriptionType.PACKAGE_8:  {"classes": 8,  "duration_days": 30, "price": 7000},
-    SubscriptionType.PACKAGE_12: {"classes": 12, "duration_days": 30, "price": 9000},
+    SubscriptionType.TRIAL:    {"classes": 1,  "duration_days": 60, "price": 500},
+    SubscriptionType.SINGLE:   {"classes": 1,  "duration_days": 60, "price": 1100},
+    SubscriptionType.PACKAGE_4:  {"classes": 4,  "duration_days": 60, "price": 3200},
+    SubscriptionType.PACKAGE_4_REGULAR: {"classes": 4, "duration_days": 60, "price": 4000},
+    SubscriptionType.PACKAGE_8:  {"classes": 8,  "duration_days": 60, "price": 7000},
+    SubscriptionType.PACKAGE_12: {"classes": 12, "duration_days": 60, "price": 9000},
     SubscriptionType.UNLIMITED: {"classes": 9999, "duration_days": 30, "price": 10800},
 }
 

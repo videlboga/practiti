@@ -415,6 +415,7 @@ class SubscriptionService(SubscriptionServiceProtocol):
             SubscriptionType.TRIAL: 500,
             SubscriptionType.SINGLE: 1100,
             SubscriptionType.PACKAGE_4: 3200,
+            SubscriptionType.PACKAGE_4_REGULAR: 4000,
             SubscriptionType.PACKAGE_8: 7000,
             SubscriptionType.PACKAGE_12: 9000,
             SubscriptionType.UNLIMITED: 10800,
@@ -432,12 +433,10 @@ class SubscriptionService(SubscriptionServiceProtocol):
         Returns:
             Дата окончания
         """
-        if subscription_type == SubscriptionType.TRIAL:
-            return start_date + timedelta(days=14)  # Пробный - 14 дней
-        elif subscription_type == SubscriptionType.SINGLE:
-            return start_date + timedelta(days=1)   # Разовое - 1 день
-        else:
-            return start_date + timedelta(days=30)  # Все остальные - 30 дней
+        if subscription_type == SubscriptionType.UNLIMITED:
+            return start_date + timedelta(days=30)
+        # остальные – 60 дней
+        return start_date + timedelta(days=60)
     
     def get_subscription_classes_count(self, subscription_type: SubscriptionType) -> int:
         """
@@ -453,6 +452,7 @@ class SubscriptionService(SubscriptionServiceProtocol):
             SubscriptionType.TRIAL: 1,
             SubscriptionType.SINGLE: 1,
             SubscriptionType.PACKAGE_4: 4,
+            SubscriptionType.PACKAGE_4_REGULAR: 4,
             SubscriptionType.PACKAGE_8: 8,
             SubscriptionType.PACKAGE_12: 12,
             SubscriptionType.UNLIMITED: 999,  # Безлимитный
@@ -479,21 +479,20 @@ class SubscriptionService(SubscriptionServiceProtocol):
     
     def _get_subscription_duration_days(self, subscription_type: SubscriptionType) -> int:
         """Получить продолжительность абонемента в днях."""
-        if subscription_type == SubscriptionType.TRIAL:
-            return 14
-        elif subscription_type == SubscriptionType.SINGLE:
-            return 1
-        else:
+        if subscription_type == SubscriptionType.UNLIMITED:
             return 30
+        else:
+            return 60
     
     def _get_subscription_description(self, subscription_type: SubscriptionType) -> str:
         """Получить описание абонемента."""
         descriptions = {
-            SubscriptionType.TRIAL: "Пробный абонемент - 1 занятие на 14 дней",
-            SubscriptionType.SINGLE: "Разовое занятие",
-            SubscriptionType.PACKAGE_4: "Абонемент на 4 занятия (30 дней)",
-            SubscriptionType.PACKAGE_8: "Абонемент на 8 занятий (30 дней)",
-            SubscriptionType.PACKAGE_12: "Абонемент на 12 занятий (30 дней)",
+            SubscriptionType.TRIAL: "Пробный абонемент - 1 занятие на 60 дней",
+            SubscriptionType.SINGLE: "Разовое занятие (60 дней)",
+            SubscriptionType.PACKAGE_4: "Абонемент новичка на 4 занятия (60 дней)",
+            SubscriptionType.PACKAGE_4_REGULAR: "Абонемент обычный на 4 занятия (60 дней)",
+            SubscriptionType.PACKAGE_8: "Абонемент на 8 занятий (60 дней)",
+            SubscriptionType.PACKAGE_12: "Абонемент на 12 занятий (60 дней)",
             SubscriptionType.UNLIMITED: "Безлимитный абонемент (30 дней)",
         }
         return descriptions[subscription_type]

@@ -21,6 +21,7 @@ class SubscriptionType(str, Enum):
     PACKAGE_8 = "package_8"           # 8 занятий (7000₽, 30 дней)
     PACKAGE_12 = "package_12"         # 12 занятий (9000₽, 30 дней)
     UNLIMITED = "unlimited"           # Безлимитный (10800₽, 30 дней)
+    PACKAGE_4_REGULAR = "package_4_regular"         # 4 занятия обычный тариф (4000₽, 30 дней)
 
 
 class SubscriptionStatus(str, Enum):
@@ -180,12 +181,13 @@ class SubscriptionUpdateData(BaseModel):
 
 # Параметры по умолчанию для каждого типа абонемента: кол-во занятий, срок (дни), цена
 SUBSCRIPTION_DETAILS = {
-    SubscriptionType.TRIAL:    {"classes": 1, "duration_days": 14, "price": 500},
-    SubscriptionType.SINGLE:   {"classes": 1, "duration_days": 30, "price": 1100},
-    SubscriptionType.PACKAGE_4:  {"classes": 4, "duration_days": 30, "price": 3200},
-    SubscriptionType.PACKAGE_8:  {"classes": 8, "duration_days": 30, "price": 7000},
-    SubscriptionType.PACKAGE_12: {"classes": 12, "duration_days": 30, "price": 9000},
+    SubscriptionType.TRIAL:    {"classes": 1, "duration_days": 60, "price": 500},
+    SubscriptionType.SINGLE:   {"classes": 1, "duration_days": 60, "price": 1100},
+    SubscriptionType.PACKAGE_4:  {"classes": 4, "duration_days": 60, "price": 3200},
+    SubscriptionType.PACKAGE_8:  {"classes": 8, "duration_days": 60, "price": 7000},
+    SubscriptionType.PACKAGE_12: {"classes": 12, "duration_days": 60, "price": 9000},
     SubscriptionType.UNLIMITED: {"classes": 9999, "duration_days": 30, "price": 10800},
+    SubscriptionType.PACKAGE_4_REGULAR: {"classes": 4, "duration_days": 60, "price": 4000},
 }
 
 # Синоним для старого кода, который импортировал SUBSCRIPTION_TYPES
