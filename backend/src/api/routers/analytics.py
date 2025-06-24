@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 import sys
 
 from ..models import (
-    AnalyticsResponse, ClientStatsResponse, SubscriptionStatsResponse, 
-    NotificationStatsResponse
+    AnalyticsResponse, ClientStatsResponse, SubscriptionStatsResponse,
+    NotificationStatsResponse, DashboardMetricsResponse
 )
 from ...services.protocols.client_service import ClientServiceProtocol
 from ...services.protocols.subscription_service import SubscriptionServiceProtocol
@@ -23,6 +23,7 @@ from ...models.subscription import SubscriptionStatus, SubscriptionType
 from ...models.notification import NotificationStatus, NotificationType
 from ...utils.exceptions import BusinessLogicError
 from ...config.settings import settings
+from ...services.protocols.booking_service import BookingServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,30 @@ def _build_notification_service() -> NotificationServiceProtocol:
     subscription_service = _build_subscription_service()
     telegram_sender = TelegramSenderService()
     return NotificationService(notif_repo, client_service, subscription_service, telegram_sender)
+
+
+# ---------------------- Booking Service ----------------------
+
+def _build_booking_service() -> BookingServiceProtocol:
+    """Фабрика BookingService (Google Sheets / In-Memory)."""
+
+    from ...services.booking_service import BookingService
+
+    if "pytest" in sys.modules:
+        from ...repositories.in_memory_booking_repository import InMemoryBookingRepository
+        repo = InMemoryBookingRepository()
+    else:
+        from ...repositories.google_sheets_booking_repository import GoogleSheetsBookingRepository
+        from ...integrations.google_sheets import GoogleSheetsClient
+        repo = GoogleSheetsBookingRepository(GoogleSheetsClient())
+
+    return BookingService(repo)
+
+
+# DI wrapper
+
+def get_booking_service() -> BookingServiceProtocol:  # type: ignore[override]
+    return _build_booking_service()
 
 
 # --- Реализация зависимостей, которые легко мокируются в тестах ---
@@ -377,12 +402,44 @@ async def get_revenue_analytics(
 # --------------------------------------------------------------
 
 
-@router.get("/dashboard/metrics", response_model=AnalyticsResponse)
+@router.get("/dashboard/metrics", response_model=DashboardMetricsResponse)
 async def get_dashboard_metrics(  # noqa: D401
     period: str = Query("month", description="Период: day, week, month, year"),
     client_service: ClientServiceProtocol = Depends(get_client_service),
     subscription_service: SubscriptionServiceProtocol = Depends(get_subscription_service),
-    notification_service: NotificationServiceProtocol = Depends(get_notification_service),
-) -> AnalyticsResponse:
-    """Alias для фронтенда: /dashboard/metrics → overview."""
-    return await get_overview_analytics(period, client_service, subscription_service, notification_service)
+    booking_service: BookingServiceProtocol = Depends(get_booking_service),
+) -> DashboardMetricsResponse:
+    """Метрики для главного дашборда (плоская структура)."""
+
+    try:
+        # Клиенты
+        clients = await client_service.get_all_clients()
+        total_clients = len(clients)
+        active_clients = len([c for c in clients if c.status == ClientStatus.ACTIVE])
+
+        # Абонементы
+        subscriptions = await subscription_service.get_all_subscriptions()
+        total_subs = len(subscriptions)
+        active_subs = len([s for s in subscriptions if s.status == SubscriptionStatus.ACTIVE])
+
+        # Бронирования
+        bookings = await booking_service.list_bookings()
+        total_bookings = len(bookings)
+
+        now = datetime.utcnow()
+        month_ago = now - timedelta(days=30)
+        bookings_this_month = len([b for b in bookings if b.class_date >= month_ago])
+
+        return DashboardMetricsResponse(
+            totalClients=total_clients,
+            activeClients=active_clients,
+            totalSubscriptions=total_subs,
+            activeSubscriptions=active_subs,
+            totalBookings=total_bookings,
+            bookingsThisMonth=bookings_this_month,
+            generatedAt=now,
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка формирования метрик дашборда: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения метрик")

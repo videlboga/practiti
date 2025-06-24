@@ -322,4 +322,21 @@ class BookingUpdateRequest(BaseModel):
 
     def to_update_data(self):  # pragma: no cover
         from ..models.booking import BookingUpdateData
-        return BookingUpdateData.model_validate(self.model_dump(exclude_unset=True)) 
+        return BookingUpdateData.model_validate(self.model_dump(exclude_unset=True))
+
+
+# ===== DASHBOARD METRICS =====
+
+class DashboardMetricsResponse(BaseModel):
+    """Плоские метрики, которые ждёт фронтенд."""
+    totalClients: int
+    activeClients: int
+    totalSubscriptions: int
+    activeSubscriptions: int
+    totalBookings: int
+    bookingsThisMonth: int
+    generatedAt: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True 
